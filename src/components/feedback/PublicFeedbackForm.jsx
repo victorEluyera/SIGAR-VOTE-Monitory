@@ -138,7 +138,6 @@ export default function PublicFeedbackForm({ token }) {
           <span>Oyo State</span>
           <h1>{form.title}</h1>
           <p>{form.intro}</p>
-          {session && <p className="ff-agent">Signed in as {session.user?.name}: these answers will be credited to you as the field agent.</p>}
         </header>
 
         <section className="ff-section"><h2>About you</h2>{questionsOf("you")}</section>
