@@ -9,35 +9,102 @@ import { lgaLabel, matchLga, oyoLgas } from './lga.js';
  * one LGA, or the polling units of one ward, plus "where to act" and findings for that view.
  *
  * Levels and what each layer can show there:
- *   LGA   everything: register, ground, outreach, opinion (survey), 2023 governorship and presidential
- *   ward  register voters, members/agents/volunteers, PUs reached, calls, 2023 presidential;
- *         the survey and caller needs exist only per LGA, so they come through as context
- *   PU    register voters, members/agents/volunteers, 2023 presidential result
+ *   LGA   everything: register (voters, age, gender, occupation…), ground, outreach, undecided
+ *         (survey), 2023 governorship and presidential
+ *   ward  register, APC confirmed members, 10x volunteers, polling units reached, calls, 2023
+ *         presidential; the survey and caller needs exist only per LGA, so they come as context
+ *   PU    register, APC confirmed members, 10x volunteers, 2023 presidential result
+ *
+ * Register figures come from the voter register's own records (built-in data, counts only).
+ * 10x volunteers come live from the oyo10x platform and read "not connected" without it.
  */
 
+const ALL_LEVELS = ['lga', 'ward', 'pu'];
 export const LAYERS = {
   population: { label: 'Population', group: 'Register', levels: ['lga'], format: 'count' },
-  registered: { label: 'Registered voters', group: 'Register', levels: ['lga', 'ward', 'pu'], format: 'count' },
+  registered: { label: 'Registered voters', group: 'Register', levels: ALL_LEVELS, format: 'count' },
   pvc: { label: 'PVCs collected', group: 'Register', levels: ['lga'], format: 'count' },
-  members: { label: 'Members', group: 'Ground', levels: ['lga', 'ward', 'pu'], format: 'count' },
-  agents: { label: 'Agents', group: 'Ground', levels: ['lga', 'ward', 'pu'], format: 'count' },
-  volunteers: { label: 'Volunteers', group: 'Ground', levels: ['lga', 'ward', 'pu'], format: 'count' },
-  reached: { label: 'PUs reached', group: 'Ground', levels: ['lga', 'ward'], format: 'share' },
+  // Who is on the voter register, from its own records (age at 1 Jan 2027).
+  women: { label: 'Women', group: 'Register', levels: ALL_LEVELS, format: 'share' },
+  youth: { label: 'Aged 18–34', group: 'Register', levels: ALL_LEVELS, format: 'share' },
+  middleAge: { label: 'Aged 35–54', group: 'Register', levels: ALL_LEVELS, format: 'share' },
+  older: { label: 'Aged 55+', group: 'Register', levels: ALL_LEVELS, format: 'share' },
+  occupation: { label: 'Main occupation', group: 'Register', levels: ALL_LEVELS, format: 'category' },
+  phone: { label: 'Phone on file', group: 'Register', levels: ALL_LEVELS, format: 'share' },
+  disability: { label: 'With a disability', group: 'Register', levels: ALL_LEVELS, format: 'count' },
+  members: { label: 'APC confirmed members', group: 'Ground', levels: ALL_LEVELS, format: 'count' },
+  tenx: { label: '10x volunteers', group: 'Ground', levels: ALL_LEVELS, format: 'count', source: 'oyo10x' },
+  reached: { label: 'Polling units reached', group: 'Ground', levels: ['lga', 'ward'], format: 'share' },
   contacts: { label: 'Contacts', group: 'Ground', levels: ['lga'], format: 'count' },
-  calls: { label: 'CC reached', group: 'Outreach', levels: ['lga', 'ward'], format: 'count' },
+  calls: { label: 'Call center reached', group: 'Outreach', levels: ['lga', 'ward'], format: 'count' },
   needs: { label: 'Needs', group: 'Outreach', levels: ['lga'], format: 'category' },
-  support: { label: 'Support (Sen. Alli)', group: 'Opinion', levels: ['lga'], format: 'share' },
   undecided: { label: 'Undecided', group: 'Opinion', levels: ['lga'], format: 'share' },
   gov2023: { label: '2023 Governorship', group: 'History', levels: ['lga'], format: 'share' },
-  pres2023: { label: '2023 Presidential', group: 'History', levels: ['lga', 'ward', 'pu'], format: 'share' },
+  pres2023: { label: '2023 Presidential', group: 'History', levels: ALL_LEVELS, format: 'share' },
 };
 // "Colour by" options that compare two layers.
 export const COMPARISONS = {
-  changeGov: { label: 'Change: Sen. Alli now vs APC 2023 Governorship', needs: ['support', 'gov2023'], levels: ['lga'] },
-  changePres: { label: 'Change: Sen. Alli now vs APC 2023 Presidential', needs: ['support', 'pres2023'], levels: ['lga'] },
-  membersPerPu: { label: 'Members per polling unit', needs: ['members'], levels: ['lga', 'ward'] },
+  membersPerPu: { label: 'APC confirmed members per polling unit', needs: ['members'], levels: ['lga', 'ward'] },
   callsPer1k: { label: 'Calls per 1,000 registered voters', needs: ['calls', 'registered'], levels: ['lga', 'ward'] },
 };
+
+export const OCCUPATIONS = { trading: 'Trading', student: 'Students', artisan: 'Artisans', business: 'Business', farming: 'Farming & fishing', public: 'Civil & public service', homemaker: 'Homemakers', other: 'Other' };
+
+/** Map values and card detail for one area's register totals ({ v, f, a, o, d, p }), or nulls. */
+function registerFigures(stats, bands) {
+  if (!stats?.v) return { values: { women: null, youth: null, middleAge: null, older: null, occupation: null, phone: null, disability: null }, detail: null };
+  const age = (from, to) => stats.a.slice(from, to).reduce((sum, count) => sum + count, 0);
+  const occupations = Object.entries(stats.o).sort((a, b) => b[1] - a[1]);
+  const main = occupations.find(([id]) => id !== 'other')?.[0] || null;
+  return {
+    values: {
+      women: share(stats.f, stats.v),
+      youth: share(age(0, 2), stats.v),
+      middleAge: share(age(2, 4), stats.v),
+      older: share(age(4, 6), stats.v),
+      occupation: main,
+      phone: share(stats.p, stats.v),
+      disability: stats.d,
+    },
+    detail: {
+      voters: stats.v,
+      women: share(stats.f, stats.v),
+      ages: bands.map((label, i) => ({ label, share: share(stats.a[i], stats.v) })),
+      occupations: occupations.slice(0, 5).map(([id, count]) => ({ id, label: OCCUPATIONS[id] || id, share: share(count, stats.v) })),
+      disability: stats.d,
+      phone: share(stats.p, stats.v),
+    },
+  };
+}
+
+/**
+ * 10x volunteers per area from the oyo10x snapshot (aggregate counts only). null when oyo10x is
+ * not connected, so the layer reads "not connected" rather than zero.
+ */
+function tenxCounts(tenx) {
+  if (!tenx) return null;
+  const byLga = new Map();
+  const byWard = new Map();
+  const byUnit = new Map();
+  for (const row of tenx.byLga || []) {
+    const lga = matchLga(row.name);
+    if (lga) byLga.set(lga, (byLga.get(lga) || 0) + row.members);
+  }
+  for (const row of tenx.byWard || []) {
+    const lga = matchLga(row.lga);
+    if (!lga) continue;
+    const ward = wardResolver(lga)(row.name);
+    if (ward) byWard.set(`${lga}|${ward.number}`, (byWard.get(`${lga}|${ward.number}`) || 0) + row.members);
+  }
+  for (const row of tenx.byPollingUnit || []) {
+    const lga = matchLga(row.lga);
+    if (!lga) continue;
+    const ward = wardResolver(lga)(row.ward);
+    const number = ward?.units.find((unit) => String(unit.number) === String(Number(row.code ?? row.name)) || unit.name.toLowerCase() === String(row.name).toLowerCase())?.number;
+    if (ward && number !== undefined) byUnit.set(`${lga}|${ward.number}|${number}`, (byUnit.get(`${lga}|${ward.number}|${number}`) || 0) + row.members);
+  }
+  return { byLga, byWard, byUnit, total: tenx.totals?.registered ?? null };
+}
 
 const MIN_NAMED = 30;
 const round = (value, digits = 4) => (value == null || !Number.isFinite(value) ? null : Number(value.toFixed(digits)));
@@ -46,22 +113,19 @@ const pct = (value) => `${Math.round(value * 100)}%`;
 const pts = (value) => `${value >= 0 ? '+' : '−'}${Math.abs(Math.round(value * 100))} pts`;
 const fmt = (value) => Number(value || 0).toLocaleString('en-US');
 const latest = (items) => [...items].sort((a, b) => String(b.uploadedAt).localeCompare(String(a.uploadedAt)))[0] || null;
-const groupOf = (label) => (/agent/i.test(label) ? 'agents' : /bsa|volunteer/i.test(label) ? 'volunteers' : 'other');
 
-/** People (deduplicated) per area key, split by group, from member records placed by `place`. */
+/** People (deduplicated) per area key from member records placed by `place`. */
 function tallyMembers(memberSets, place) {
   const areas = new Map();
   let unplaced = 0;
   for (const set of memberSets) {
-    const group = groupOf(set.label);
     for (const record of set.records) {
       const key = place(record);
       if (key === undefined) continue; // outside this view
       if (key === null) { unplaced += 1; continue; }
-      if (!areas.has(key)) areas.set(key, { all: new Set(), agents: new Set(), volunteers: new Set(), units: new Set() });
+      if (!areas.has(key)) areas.set(key, { all: new Set(), units: new Set() });
       const area = areas.get(key);
       area.all.add(record[3]);
-      if (group !== 'other') area[group].add(record[3]);
       if (record[2]) area.units.add(`${record[1]}|${record[2]}`);
     }
   }
@@ -114,14 +178,17 @@ function combineNeeds(fromSurvey, fromCallers) {
   }).sort((a, b) => b.score - a.score);
 }
 
-function lgaView({ memberSets, contactSet, centerSet, reference, survey }) {
+function lgaView({ memberSets, contactSet, centerSet, reference, survey, register, tenx }) {
   const results = lgaResults2023();
   const geo = oyoGeo();
   const surveyRows = surveyByLga(survey);
   const { areas } = tallyMembers(memberSets, (record) => record[0]);
   const report = centerSet?.report;
   const needsSurvey = surveyNeeds(survey);
-  const stateRegistered = [...geo.lgas.values()].reduce((sum, item) => sum + item.registered, 0);
+  // Registered voters per LGA: uploaded reference, else the voter register, else the INEC PU register.
+  // The state total is the sum of the same figures, so population shares always add up.
+  const registeredOf = (name) => reference?.values?.[name]?.registeredVoters ?? register?.lgas?.[name]?.s.v ?? geo.lgas.get(name)?.registered ?? null;
+  const stateRegistered = oyoLgas().reduce((sum, item) => sum + (registeredOf(item.name) || 0), 0);
   return oyoLgas().map((lga) => {
     const members = areas.get(lga.name);
     const surveyRow = surveyRows.get(lga.name);
@@ -129,20 +196,21 @@ function lgaView({ memberSets, contactSet, centerSet, reference, survey }) {
     const gov = results.governorship.get(lga.name);
     const pres = results.presidential.get(lga.name);
     const ref = reference?.values?.[lga.name] || {};
-    const register = geo.lgas.get(lga.name);
+    const geoLga = geo.lgas.get(lga.name);
     const needs = combineNeeds(needsSurvey.get(lga.name), report?.issues?.byLga?.[lga.name]);
     const support = readable ? surveyRow.focusShare : null;
-    const pollingUnits = register?.pollingUnits || lga.pollingUnits;
-    const registered = ref.registeredVoters ?? register?.registered ?? null;
+    const pollingUnits = geoLga?.pollingUnits || lga.pollingUnits;
+    const voterRegister = registerFigures(register?.lgas?.[lga.name]?.s, register?.bands || []);
+    const registered = registeredOf(lga.name);
     const values = {
       // Uploaded NPC figure when there is one; otherwise the state projection shared out by each
       // LGA's share of registered voters (flagged as an estimate in the detail).
-      population: ref.population ?? (register?.registered && stateRegistered ? Math.round(STATE_BASELINE.population.value * (register.registered / stateRegistered)) : null),
+      population: ref.population ?? (registered && stateRegistered ? Math.round(STATE_BASELINE.population.value * (registered / stateRegistered)) : null),
       registered,
       pvc: ref.pvcCollected ?? null,
+      ...voterRegister.values,
       members: members ? members.all.size : 0,
-      agents: members ? members.agents.size : 0,
-      volunteers: members ? members.volunteers.size : 0,
+      tenx: tenx ? tenx.byLga.get(lga.name) || 0 : null,
       reached: share(Math.min(members?.units.size || 0, pollingUnits), pollingUnits),
       contacts: contactSet ? contactSet.counts[lga.name] || 0 : null,
       calls: report ? report.byLga[lga.name]?.calls || 0 : null,
@@ -160,7 +228,7 @@ function lgaView({ memberSets, contactSet, centerSet, reference, survey }) {
       key: lga.name,
       name: lgaLabel(lga.name),
       pollingUnits,
-      wards: register?.wardList.length || lga.wards,
+      wards: geoLga?.wardList.length || lga.wards,
       unitsWithMember: Math.min(members?.units.size || 0, pollingUnits),
       values,
       detail: {
@@ -170,12 +238,14 @@ function lgaView({ memberSets, contactSet, centerSet, reference, survey }) {
         needs: needs.slice(0, 5),
         populationEstimated: ref.population == null,
         callWards: report?.byLga[lga.name]?.wards ?? null,
+        register: voterRegister.detail,
       },
     };
   });
 }
 
-function wardView({ lga, memberSets, centerSet }) {
+function wardView({ lga, memberSets, centerSet, register: voterRegister, tenx }) {
+  const registerWards = voterRegister?.lgas?.[lga]?.wards || {};
   const register = oyoGeo().lgas.get(lga);
   if (!register) return { rows: [], unplaced: 0 };
   const resolve = wardResolver(lga);
@@ -202,17 +272,20 @@ function wardView({ lga, memberSets, centerSet }) {
     const members = areas.get(ward.number);
     const pres = presFromUnits(ward.units);
     const reachedUnits = unitSets.get(ward.number)?.size || 0;
+    const stats = registerWards[ward.number]?.s;
+    const figures = registerFigures(stats, voterRegister?.bands || []);
+    const registered = stats?.v || ward.registered || null;
     const values = {
-      registered: ward.registered || null,
+      registered,
+      ...figures.values,
       members: members ? members.all.size : 0,
-      agents: members ? members.agents.size : 0,
-      volunteers: members ? members.volunteers.size : 0,
+      tenx: tenx ? tenx.byWard.get(`${lga}|${ward.number}`) || 0 : null,
       reached: share(reachedUnits, ward.units.length),
       calls: centerSet ? calls.get(ward.number) || 0 : null,
       pres2023: pres?.apc ?? null,
     };
     values.membersPerPu = round(values.members / Math.max(ward.units.length, 1), 2);
-    values.callsPer1k = values.calls != null && ward.registered ? round((values.calls / ward.registered) * 1000, 2) : null;
+    values.callsPer1k = values.calls != null && registered ? round((values.calls / registered) * 1000, 2) : null;
     return {
       key: String(ward.number),
       name: ward.name,
@@ -221,13 +294,13 @@ function wardView({ lga, memberSets, centerSet }) {
       pollingUnits: ward.units.length,
       unitsWithMember: reachedUnits,
       values,
-      detail: { pres2023: pres },
+      detail: { pres2023: pres, register: figures.detail },
     };
   });
   return { rows, unplaced, callsUnplaced };
 }
 
-function unitView({ lga, wardNumber, memberSets }) {
+function unitView({ lga, wardNumber, memberSets, register: voterRegister, tenx }) {
   const register = oyoGeo().lgas.get(lga);
   const ward = register?.wards.get(Number(wardNumber));
   if (!ward) return { rows: [], unplaced: 0, ward: null };
@@ -240,19 +313,21 @@ function unitView({ lga, wardNumber, memberSets }) {
   const rows = ward.units.map((unit) => {
     const members = areas.get(String(unit.number));
     const pres = unit.pres ? presFromUnits([unit]) : null;
+    const stats = voterRegister?.lgas?.[lga]?.wards?.[ward.number]?.units?.[unit.number];
+    const figures = registerFigures(stats, voterRegister?.bands || []);
     return {
       key: String(unit.number),
       name: unit.name,
       code: unit.code,
       number: unit.number,
       values: {
-        registered: unit.registered || null,
+        registered: stats?.v || unit.registered || null,
+        ...figures.values,
         members: members ? members.all.size : 0,
-        agents: members ? members.agents.size : 0,
-        volunteers: members ? members.volunteers.size : 0,
+        tenx: tenx ? tenx.byUnit.get(`${lga}|${ward.number}|${unit.number}`) || 0 : null,
         pres2023: pres?.apc ?? null,
       },
-      detail: { accredited: unit.accredited || null, pres2023: pres, sheet: unit.status },
+      detail: { accredited: unit.accredited || null, pres2023: pres, sheet: unit.status, register: figures.detail },
     };
   });
   return { rows, unplaced, ward };
@@ -269,8 +344,6 @@ function priority(rows, level) {
     if (level !== 'pu') {
       if (v.reached != null) parts.push(['few polling units reached', 1 - v.reached]);
       if (v.callsPer1k != null) parts.push(['few calls for its size', 1 - Math.min(v.callsPer1k / maxCalls, 1)]);
-      if (v.support != null) parts.push(['low support', 1 - v.support]);
-      if (v.changeGov != null) parts.push(['fallen since 2023', Math.min(Math.max(-v.changeGov, 0) * 2, 1)]);
     } else {
       parts.push(['no member here', v.members ? Math.max(0, 1 - v.members / 3) : 1]);
       if (v.pres2023 != null) parts.push(['APC lost here in 2023', v.pres2023 < 0.5 ? 1 - v.pres2023 : 0]);
@@ -345,7 +418,8 @@ function unitInsights(rows, { wardName, unplaced }) {
   return out;
 }
 
-export function buildMap({ datasets = [], survey = null, lga = '', ward = '' }) {
+export function buildMap({ datasets = [], survey = null, lga = '', ward = '', register = null, tenx: tenxData = null }) {
+  const tenx = tenxCounts(tenxData);
   const memberSets = datasets.filter((item) => item.kind === 'members');
   const contactSet = latest(datasets.filter((item) => item.kind === 'contacts'));
   const centerSet = latest(datasets.filter((item) => item.kind === 'contact-center'));
@@ -353,7 +427,7 @@ export function buildMap({ datasets = [], survey = null, lga = '', ward = '' }) 
   const wantedLga = lga ? matchLga(lga) : '';
   const level = wantedLga && ward ? 'pu' : wantedLga ? 'ward' : 'lga';
 
-  const lgaRows = lgaView({ memberSets, contactSet, centerSet, reference, survey });
+  const lgaRows = lgaView({ memberSets, contactSet, centerSet, reference, survey, register, tenx });
   priority(lgaRows, 'lga');
   let rows = lgaRows;
   let insights = [];
@@ -364,14 +438,15 @@ export function buildMap({ datasets = [], survey = null, lga = '', ward = '' }) 
     const lgaRow = lgaRows.find((row) => row.key === wantedLga);
     context = lgaRow;
     if (level === 'ward') {
-      const view = wardView({ lga: wantedLga, memberSets, centerSet });
+      const view = wardView({ lga: wantedLga, memberSets, centerSet, register, tenx });
       rows = view.rows;
       priority(rows, 'ward');
       insights = wardInsights(rows, { lgaName: lgaLabel(wantedLga), unplaced: view.unplaced, callsUnplaced: view.callsUnplaced, lgaRow });
     } else {
-      const view = unitView({ lga: wantedLga, wardNumber: ward, memberSets });
+      const view = unitView({ lga: wantedLga, wardNumber: ward, memberSets, register, tenx });
       rows = view.rows;
-      wardInfo = view.ward ? { number: view.ward.number, name: view.ward.name, code: view.ward.code, registered: view.ward.registered, pollingUnits: view.ward.units.length } : null;
+      const wardStats = register?.lgas?.[wantedLga]?.wards?.[view.ward?.number]?.s;
+      wardInfo = view.ward ? { number: view.ward.number, name: view.ward.name, code: view.ward.code, registered: wardStats?.v || view.ward.registered, pollingUnits: view.ward.units.length, register: registerFigures(wardStats, register?.bands || []).detail } : null;
       priority(rows, 'pu');
       insights = view.ward ? unitInsights(rows, { wardName: view.ward.name, unplaced: view.unplaced }) : [];
     }
@@ -381,6 +456,8 @@ export function buildMap({ datasets = [], survey = null, lga = '', ward = '' }) 
     ...layer,
     available: layer.levels.includes(level) && rows.some((row) => row.values[key] != null && row.values[key] !== 0),
     loaded: lgaRows.some((row) => row.values[key] != null && row.values[key] !== 0),
+    // Why an empty layer is empty, when it is not something an upload fixes.
+    ...(layer.source === 'oyo10x' ? { hint: !tenxData ? 'oyo10x is not connected to this platform yet' : 'oyo10x has not reported volunteers by area yet' } : {}),
   }]));
   return {
     level,
@@ -390,11 +467,10 @@ export function buildMap({ datasets = [], survey = null, lga = '', ward = '' }) 
     comparisons: Object.fromEntries(Object.entries(COMPARISONS).filter(([, item]) => item.levels.includes(level)).map(([key, item]) => [key, { label: item.label, needs: item.needs }])),
     totals: {
       members: new Set(memberSets.flatMap((set) => set.records.map((record) => record[3]))).size,
-      agents: new Set(memberSets.filter((set) => groupOf(set.label) === 'agents').flatMap((set) => set.records.map((record) => record[3]))).size,
-      volunteers: new Set(memberSets.filter((set) => groupOf(set.label) === 'volunteers').flatMap((set) => set.records.map((record) => record[3]))).size,
+      tenx: tenx?.total ?? null,
       contacts: contactSet ? Object.values(contactSet.counts).reduce((sum, value) => sum + value, 0) : null,
       calls: centerSet?.report?.overview.calls ?? null,
-      registered: [...oyoGeo().lgas.values()].reduce((sum, item) => sum + item.registered, 0),
+      registered: register?.total || [...oyoGeo().lgas.values()].reduce((sum, item) => sum + item.registered, 0),
     },
     context,
     rows,
@@ -402,7 +478,8 @@ export function buildMap({ datasets = [], survey = null, lga = '', ward = '' }) 
     insights: insights.sort((a, b) => order[a.tone] - order[b.tone]),
     sources: {
       history: 'INEC IReV 2023 result sheets, transcribed; incomplete where sheets were missing, so shares are indicative.',
-      register: oyoGeo().source,
+      register: register ? register.source : oyoGeo().source,
+      tenx: tenxData ? 'oyo10x platform' : 'oyo10x is not connected',
     },
   };
 }

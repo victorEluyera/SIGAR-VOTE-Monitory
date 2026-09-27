@@ -74,6 +74,39 @@ test('member lists keep no names or phones and count a person in two lists once'
   assert.equal(atiba.members.unitsCovered, 2);
 });
 
+test('a register-style member list: named polling units become INEC units, and a shared phone is not one person', () => {
+  const header = ['Name', 'Gender', 'Date of birth', 'Phone', 'Polling unit', 'Ward', 'LGA'];
+  const members = buildDataset('members', openWorkbook(buildXlsx({
+    List: [
+      header,
+      ['ADE OLU', 'male', '1980-01-01', '08060811060', 'baptist school, idiyan i', 'ofiki ii', 'ibarapa north'],
+      // Same phone, different person (a family line): counted as a second person.
+      ['KEMI OLU', 'female', '1985-05-05', '08060811060', 'baptist school, idiyan ii', 'ofiki ii', 'ibarapa north'],
+      // The same person listed twice: still one.
+      ['ADE OLU', 'male', '1980-01-01', '08060811060', 'baptist school, idiyan i', 'ofiki ii', 'ibarapa north'],
+      // "Community hall i" exists in three Ibarapa North wards; without a ward it cannot be placed.
+      ['BOLA ADE', 'male', '1990-02-02', '07011112222', 'community hall i', '', 'ibarapa north'],
+    ],
+  })), { label: 'Party members' });
+
+  assert.equal(members.summary.uniquePeople, 3);
+  assert.equal(members.summary.sharedPhones, 1);
+  assert.equal(members.summary.unitsByName, 4);
+  assert.equal(members.summary.unitsByNameMatched, 3, 'an ambiguous unit name is left unmatched, never guessed');
+  assert.deepEqual(members.records[0].slice(0, 3), ['IBARAPA NORTH', 'OFIKI II', '8']);
+  assert.deepEqual(members.records[1].slice(0, 3), ['IBARAPA NORTH', 'OFIKI II', '9']);
+  assert.ok(!JSON.stringify(members).includes('08060811060'));
+  assert.ok(!JSON.stringify(members).includes('1980-01-01'));
+
+  const pulse = buildPulse({ datasets: [members] });
+  assert.equal(pulse.members.total, 3);
+  assert.equal(pulse.members.unitsCovered, 3, 'two INEC units found from their names, plus the unplaceable one counted as typed');
+
+  // A list without dates of birth keeps the old rule: one phone is one person.
+  const agents = buildDataset('members', openWorkbook(buildXlsx({ Master: [['Agent name', 'Phone', 'LGA'], ['ADE OLU', '08060811060', 'Atiba'], ['KEMI OLU', '08060811060', 'Atiba']] })));
+  assert.equal(agents.summary.uniquePeople, 1);
+});
+
 test('contact lists keep only counts per LGA and flag Excel-truncated files', () => {
   const csv = Buffer.from('Lga ,Phone Number\nAFIJIO,7010000584\nAFIJIO,7010000584\nIBADAN SOUTH- EAST,8031234567\nIBADAN SOUTH-EAST,8031234568\nNOWHERE,8031234569\nAFIJIO,123\n');
   const contacts = buildDataset('contacts', openCsvWorkbook(csv));
@@ -194,19 +227,22 @@ test('issue themes read callers\' own words', () => {
 test('built-in data fills the pulse until an upload of the same kind (or member list name) replaces it', async () => {
   const { withBaseline, baselineSurvey } = await import('./baseline.js');
   const builtIn = withBaseline([]);
-  assert.deepEqual(builtIn.map((item) => item.kind).sort(), ['contact-center', 'contacts', 'members', 'members']);
+  assert.deepEqual(builtIn.map((item) => item.kind).sort(), ['contact-center', 'contacts', 'members', 'reference']);
   assert.ok(builtIn.every((item) => item.builtIn));
   assert.ok(!JSON.stringify(builtIn).match(/0[789]\d{9}/), 'no phone numbers ship with the app');
   assert.equal(baselineSurvey().responseCount, 28536);
 
   const pulse = buildPulse({ datasets: builtIn, survey: baselineSurvey() });
-  assert.equal(pulse.members.total, 10658);
-  assert.equal(pulse.members.unitsCovered, 2964, 'counted as INEC polling units');
+  assert.equal(pulse.members.total, 157289, 'APC confirmed members only; agent and volunteer lists are no longer built in');
+  assert.deepEqual(pulse.members.groups.map((group) => group.label), ['APC confirmed members']);
+  assert.equal(pulse.members.unitsCovered, 5992, 'counted as INEC polling units');
   assert.equal(pulse.contacts.total, 1048574);
   assert.equal(pulse.contactCenter.calls, 1204);
+  assert.equal(pulse.reference.registeredVoters.value, 3276307, 'registered voters per LGA from the voter register, all 33 LGAs');
+  assert.equal(pulse.reference.lgaLevelLoaded, 0, 'a registered-voters-only table does not count as population or PVC figures');
 
   const upload = { id: 'u1', kind: 'members', label: 'bsa-yv volunteers', records: [['ATIBA', 'W1', '1', 'x']], uploadedAt: new Date().toISOString() };
   const merged = withBaseline([upload]);
-  assert.deepEqual(merged.filter((item) => item.kind === 'members').map((item) => item.label).sort(), ['Polling-unit agents', 'bsa-yv volunteers']);
+  assert.deepEqual(merged.filter((item) => item.kind === 'members').map((item) => item.label).sort(), ['APC confirmed members', 'bsa-yv volunteers']);
   assert.equal(withBaseline([{ id: 'c', kind: 'contacts', label: 'New list' }]).filter((item) => item.kind === 'contacts').length, 1);
 });

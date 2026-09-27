@@ -4,6 +4,7 @@ import { recordAudit } from '../foundation/audit-helper.js';
 import { openCsvWorkbook, openWorkbook } from './xlsx.js';
 import { appendSurveyDataset, buildSurveyDataset } from './import.js';
 import { analyzeSurvey, lgaKey } from './analysis.js';
+import { withBaseline } from '../pre-election/baseline.js';
 
 const CAN_VIEW = ['Stakeholder', 'Admin', 'Super Admin'];
 const CAN_IMPORT = ['Admin', 'Super Admin'];
@@ -38,12 +39,21 @@ export function registerVoterSurveyRoutes({ app, auth, rateLimit, asyncRoute, st
       const latest = [...datasets].sort((a, b) => String(b.publicationDate || '').localeCompare(String(a.publicationDate || '')))[0];
       if (latest?.records?.length) {
         const weights = new Map(latest.records.map((record) => [lgaKey(record.geography?.lga), Number(record.value) || 0]).filter(([key, value]) => key && value > 0));
-        if (weights.size >= 20) return { weights, basis: `registered voters per LGA (${latest.sourceName})` };
+        if (weights.size >= 20) return { weights, basis: `registered voters per LGA (${latest.sourceName})`, version: latest.id };
       }
+    } catch {
+      // Fall through to the pre-election reference table.
+    }
+    try {
+      // The pre-election "Population & voter register" table (uploaded, or built in from the voter register).
+      const reference = withBaseline(await store.preElectionDatasets()).filter((item) => item.kind === 'reference')
+        .sort((a, b) => String(b.uploadedAt || '').localeCompare(String(a.uploadedAt || '')))[0];
+      const weights = new Map(Object.entries(reference?.values || {}).map(([lga, entry]) => [lgaKey(lga), Number(entry.registeredVoters) || 0]).filter(([key, value]) => key && value > 0));
+      if (weights.size >= 20) return { weights, basis: 'registered voters per LGA (voter register)', version: reference.id };
     } catch {
       // Fall through to the polling-unit proxy.
     }
-    return { weights: fallbackWeights, basis: 'number of polling units per LGA (a stand-in for voter numbers until an approved registered-voter dataset is loaded)' };
+    return { weights: fallbackWeights, basis: 'number of polling units per LGA (a stand-in for voter numbers until an approved registered-voter dataset is loaded)', version: 'units' };
   };
 
   app.get('/api/voter-survey', auth, rateLimit, asyncRoute(async (req, res) => {
@@ -52,10 +62,11 @@ export function registerVoterSurveyRoutes({ app, auth, rateLimit, asyncRoute, st
     if (!dataset) return res.json({ status: 'empty', canImport: CAN_IMPORT.includes(req.user.role) });
 
     const filter = { lga: String(req.query.lga || '').slice(0, 80), respondent: String(req.query.respondent || '').slice(0, 80) };
-    const key = `${dataset.id}|${filter.lga}|${filter.respondent}`;
+    const { weights, basis, version } = await weightsFor();
+    // The weighting source is part of the key, so newly loaded voter figures take effect at once.
+    const key = `${dataset.id}|${version}|${filter.lga}|${filter.respondent}`;
     if (!cache.has(key)) {
       if (cache.size > 200) cache.clear();
-      const { weights, basis } = await weightsFor();
       cache.set(key, analyzeSurvey(dataset, filter, { lgaWeights: weights, weightBasis: basis }));
     }
     res.set('Cache-Control', 'private, max-age=60');

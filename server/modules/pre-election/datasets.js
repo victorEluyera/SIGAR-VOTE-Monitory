@@ -1,6 +1,7 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import { buildContactCenter } from './contact-center.js';
 import { matchLga, oyoLgas } from './lga.js';
+import { oyoGeo, wardResolver } from './geo.js';
 
 /**
  * Turns uploaded spreadsheets into stored pre-election datasets. Three kinds:
@@ -30,6 +31,7 @@ const COLUMN_PATTERNS = {
   unit: [/^pu code/, /^polling unit\b.*\b(no|code|number)\b/, /^unit\b/, /^units\b/, /^polling units?$/],
   phone: [/^phone (no|number)/, /phone/, /^mobile/, /^gsm/, /^tel\b/],
   name: [/^agent name/, /^member name/, /^full name/, /^names?$/, /^name\b/],
+  dob: [/^date of birth/, /^dob\b/, /^birth ?date/],
   population: [/^population/],
   registeredVoters: [/^registered voters?/, /^registered/],
   pvcCollected: [/^pvcs? collected/, /^pvc/],
@@ -88,10 +90,43 @@ export function normalizePhone(value) {
 }
 
 const hashKey = () => process.env.PRE_ELECTION_HASH_KEY || process.env.JWT_SECRET || 'sigar-pre-election';
-const personId = (phone, name, lga) => {
-  const basis = phone ? `p:${phone}` : `n:${clean(name).toLowerCase()}|${lga}`;
+// `household` is set when this list gives one phone number to several different people (by name
+// and date of birth) -- a family sharing a line. Each of them is then a person of their own; a
+// phone used by one person stays keyed by the phone alone, so they still match across lists.
+const personId = (phone, name, lga, household = '') => {
+  const basis = phone ? `p:${phone}${household ? `|${household}` : ''}` : `n:${clean(name).toLowerCase()}|${lga}`;
   return createHmac('sha256', hashKey()).update(basis).digest('base64url').slice(0, 16);
 };
+const nameKey = (value) => String(value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+/**
+ * Lists drawn from the voter register name the polling unit ("BAPTIST SCHOOL, IDIYAN I") instead
+ * of numbering it. Match the name to the INEC register -- inside the member's ward when the ward
+ * can be placed, otherwise only when the name is unique in the LGA -- so coverage and the map
+ * count it as the real INEC unit. Returns { ward, unit } or null; never guesses between two.
+ */
+function createUnitNameResolver() {
+  const perLga = new Map();
+  return (lga, ward, unitName) => {
+    if (!perLga.has(lga)) {
+      const byName = new Map();
+      for (const place of oyoGeo().lgas.get(lga)?.wardList || []) {
+        for (const unit of place.units) {
+          const key = nameKey(unit.name);
+          if (!byName.has(key)) byName.set(key, []);
+          byName.get(key).push({ place, unit });
+        }
+      }
+      perLga.set(lga, { byName, resolveWard: wardResolver(lga) });
+    }
+    const { byName, resolveWard } = perLga.get(lga);
+    const hits = byName.get(nameKey(unitName)) || [];
+    if (!hits.length) return null;
+    const place = ward ? resolveWard(ward) : null;
+    const hit = (place && hits.find((item) => item.place === place)) || (hits.length === 1 ? hits[0] : null);
+    return hit ? { ward: hit.place.name.toUpperCase().slice(0, 80), unit: String(hit.unit.number) } : null;
+  };
+}
 const unitKey = (value) => {
   const text = clean(value);
   const number = text.match(/^0*(\d{1,3})\b/);
@@ -99,10 +134,13 @@ const unitKey = (value) => {
 };
 
 function buildMembers(workbook) {
-  const records = [];
+  const pending = [];
   const unmatched = new Map();
+  const resolveUnitName = createUnitNameResolver();
   let rowsRead = 0;
   let noPhone = 0;
+  let unitsByName = 0;
+  let unitsByNameMatched = 0;
   const sheetsUsed = [];
   for (const sheet of sheetsToRead(workbook)) {
     const rows = workbook.rows(sheet) || [];
@@ -123,16 +161,44 @@ function buildMembers(workbook) {
       if (!lga) { unmatched.set(rawLga || '(blank)', (unmatched.get(rawLga || '(blank)') || 0) + 1); continue; }
       if (!phone) noPhone += 1;
       // "Ward No." and "Ward Name" together ("03 IWERE-ILE III") give the matcher both a number and a name.
-      const ward = clean([columns.wardNo, columns.ward].filter((index) => index !== undefined).map((index) => clean(row[index])).filter(Boolean).join(' ')).toUpperCase().slice(0, 80);
-      const unit = columns.unit !== undefined ? unitKey(row[columns.unit]) : '';
-      records.push([lga, ward, unit, personId(phone, name, lga)]);
+      let ward = clean([columns.wardNo, columns.ward].filter((index) => index !== undefined).map((index) => clean(row[index])).filter(Boolean).join(' ')).toUpperCase().slice(0, 80);
+      let unit = columns.unit !== undefined ? unitKey(row[columns.unit]) : '';
+      if (unit && !/^\d+$/.test(unit)) {
+        unitsByName += 1;
+        const hit = resolveUnitName(lga, ward, row[columns.unit]);
+        if (hit) { unitsByNameMatched += 1; ({ ward, unit } = hit); }
+      }
+      const person = columns.dob !== undefined ? `${nameKey(name)}|${clean(row[columns.dob])}` : '';
+      pending.push({ lga, ward, unit, phone, name, person });
     }
   }
   if (!rowsRead) throw new Error('No member rows were found. The sheet needs a header row with a phone number or name column, and an LGA column (or one sheet per LGA).');
+
+  // Which phones this list gives to more than one person (only knowable with a date of birth).
+  const peoplePerPhone = new Map();
+  for (const entry of pending) {
+    if (!entry.phone || !entry.person) continue;
+    if (!peoplePerPhone.has(entry.phone)) peoplePerPhone.set(entry.phone, new Set());
+    peoplePerPhone.get(entry.phone).add(entry.person);
+  }
+  const sharedPhones = [...peoplePerPhone.values()].filter((people) => people.size > 1).length;
+  const records = pending.map(({ lga, ward, unit, phone, name, person }) =>
+    [lga, ward, unit, personId(phone, name, lga, peoplePerPhone.get(phone)?.size > 1 ? person : '')]);
+
   const unique = new Set(records.map((record) => record[3])).size;
   return {
     records,
-    summary: { rowsRead, stored: records.length, uniquePeople: unique, duplicatesInFile: records.length - unique, noPhone, sheets: sheetsUsed, unmatched: [...unmatched.entries()].map(([name, count]) => ({ name, count })) },
+    summary: {
+      rowsRead,
+      stored: records.length,
+      uniquePeople: unique,
+      duplicatesInFile: records.length - unique,
+      noPhone,
+      ...(sharedPhones ? { sharedPhones } : {}),
+      ...(unitsByName ? { unitsByName, unitsByNameMatched } : {}),
+      sheets: sheetsUsed,
+      unmatched: [...unmatched.entries()].map(([name, count]) => ({ name, count })),
+    },
   };
 }
 

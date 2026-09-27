@@ -25,6 +25,13 @@ function load() {
 
 export const baselineSurvey = () => load()?.survey || null;
 
+/**
+ * Voter register totals by LGA -> INEC ward number -> INEC unit number (see
+ * scripts/aggregate-voter-register.mjs): voters, women, age bands, occupation groups, disability,
+ * phone on file. Counts only. null when the built-in data has no register.
+ */
+export const baselineRegister = () => load()?.register || null;
+
 /** Uploaded datasets plus the built-in ones no upload has replaced. */
 export function withBaseline(uploaded = []) {
   const builtIn = (load()?.datasets || []).filter((item) => !uploaded.some((upload) => upload.kind === item.kind

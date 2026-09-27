@@ -55,7 +55,11 @@ export function wardResolver(lgaName, labels = []) {
   if (!lga) return () => null;
   const match = createWardMatcher(lga.wardList.map((ward) => ward.name), labels, lga.numbered);
   const byName = new Map(lga.wardList.map((ward) => [ward.name, ward]));
-  return (label) => byName.get(match(label)) || null;
+  // A label that is exactly an INEC ward name wins outright. The matcher reads the number inside
+  // names like "S 7B" (Ibadan South-East) as a ward number and gives up on them.
+  const nameKey = (value) => String(value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const exact = new Map(lga.wardList.map((ward) => [nameKey(ward.name), ward]));
+  return (label) => exact.get(nameKey(label)) || byName.get(match(label)) || null;
 }
 
 let results;

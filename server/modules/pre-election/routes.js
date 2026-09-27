@@ -3,7 +3,7 @@ import { recordAudit } from '../foundation/audit-helper.js';
 import { openCsvWorkbook, openWorkbook } from '../voter-survey/xlsx.js';
 import { buildDataset, DATASET_KINDS, describeDataset } from './datasets.js';
 import { lgaLabel, oyoLgas } from './lga.js';
-import { withBaseline } from './baseline.js';
+import { baselineRegister, withBaseline } from './baseline.js';
 import { buildMap } from './map.js';
 import { buildPulse } from './pulse.js';
 import { aiPrompt, buildFacts, checkAiPlan, HORIZONS, QUADRANTS, ruleActions, ruleBrief, STATUSES } from './actions.js';
@@ -30,8 +30,14 @@ const TEMPLATES = {
  * DELETE /api/pre-election/datasets/:id      remove an upload (admins)
  * GET    /api/pre-election/templates/:kind   a blank CSV in the expected shape
  */
-export function registerPreElectionRoutes({ app, auth, rateLimit, asyncRoute, store, geminiApiKeys = [], callGroqWithFallback = null, openAiPrimaryModel = '' }) {
+export function registerPreElectionRoutes({ app, auth, rateLimit, asyncRoute, store, geminiApiKeys = [], callGroqWithFallback = null, openAiPrimaryModel = '', oyo10x = null }) {
   const cache = new Map();
+  // 10x volunteers, live from oyo10x (cached and backed off by its client; never throws). null
+  // when it is not connected or has not answered yet, which the views show as "not connected".
+  const tenxSnapshot = async () => {
+    const snapshot = oyo10x ? await oyo10x.snapshot() : null;
+    return { data: snapshot?.data || null, version: snapshot?.fetchedAt || snapshot?.status || 'none' };
+  };
   const canView = (req, res) => {
     if (CAN_VIEW.includes(req.user?.role)) return true;
     res.status(403).json({ message: 'The pre-election pulse is available to stakeholders and administrators.' });
@@ -48,10 +54,11 @@ export function registerPreElectionRoutes({ app, auth, rateLimit, asyncRoute, st
     const [uploaded, survey] = await Promise.all([store.preElectionDatasets(), store.voterSurvey()]);
     const datasets = withBaseline(uploaded);
     const lga = String(req.query.lga || '').slice(0, 80);
-    const key = `${datasets.map((item) => item.id).sort().join(',')}|${survey?.id || ''}|${lga}`;
+    const tenx = await tenxSnapshot();
+    const key = `${datasets.map((item) => item.id).sort().join(',')}|${survey?.id || ''}|${tenx.version}|${lga}`;
     if (!cache.has(key)) {
       if (cache.size > 100) cache.clear();
-      cache.set(key, buildPulse({ datasets, survey, lga }));
+      cache.set(key, buildPulse({ datasets, survey, lga, tenx: tenx.data }));
     }
     res.set('Cache-Control', 'private, max-age=30');
     res.json({ ...cache.get(key), canUpload: CAN_UPLOAD.includes(req.user.role) });
@@ -63,10 +70,11 @@ export function registerPreElectionRoutes({ app, auth, rateLimit, asyncRoute, st
     const datasets = withBaseline(uploaded);
     const lga = String(req.query.lga || '').slice(0, 80);
     const ward = /^\d{1,2}$/.test(String(req.query.ward || '')) ? String(Number(req.query.ward)) : '';
-    const key = `map|${datasets.map((item) => item.id).sort().join(',')}|${survey?.id || ''}|${lga}|${ward}`;
+    const tenx = await tenxSnapshot();
+    const key = `map|${datasets.map((item) => item.id).sort().join(',')}|${survey?.id || ''}|${tenx.version}|${lga}|${ward}`;
     if (!cache.has(key)) {
       if (cache.size > 100) cache.clear();
-      cache.set(key, buildMap({ datasets, survey, lga, ward }));
+      cache.set(key, buildMap({ datasets, survey, lga, ward, register: baselineRegister(), tenx: tenx.data }));
     }
     res.set('Cache-Control', 'private, max-age=30');
     res.json(cache.get(key));

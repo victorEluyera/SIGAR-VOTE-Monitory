@@ -69,12 +69,17 @@ const compact = (value) => {
 };
 const pct = (value) => (value == null ? "—" : `${Math.round(value * 100)}%`);
 const pts = (value) => (value == null ? "—" : `${value >= 0 ? "+" : "−"}${Math.abs(Math.round(value * 100))} pts`);
+const OCCUPATION_COLORS = { trading: "#e0a458", student: "#5ec8ff", artisan: "#c9748f", business: "#f5dc9a", farming: "#9ccc65", public: "#b39ddb", homemaker: "#ff8a5c", other: "#a1887f" };
+const OCCUPATION_LABELS = { trading: "Trading", student: "Students", artisan: "Artisans", business: "Business", farming: "Farming & fishing", public: "Civil & public service", homemaker: "Homemakers", other: "Other" };
+// Layers read from the voter register: ticking any of them adds the register breakdown to the card.
+const REGISTER_KEYS = ["registered", "women", "youth", "middleAge", "older", "occupation", "phone", "disability"];
 const needLabel = (id) => ({ roads: "Roads", electricity: "Electricity", water: "Water", money: "Money", jobs: "Jobs", security: "Security", health: "Health", education: "Education", agriculture: "Agriculture", sanitation: "Sanitation" })[id] || id || "—";
 
 function formatValue(key, value, meta) {
   if (value == null) return "—";
   if (key === "changeGov" || key === "changePres") return pts(value);
   if (key === "needs") return needLabel(value);
+  if (key === "occupation") return OCCUPATION_LABELS[value] || value;
   if (key === "priority") return `${Math.round(value * 100)}/100`;
   if (key === "membersPerPu" || key === "callsPer1k") return Number(value).toFixed(1);
   return meta?.format === "share" ? pct(value) : num(value);
@@ -85,6 +90,10 @@ function scaleFor(key, meta, rows) {
   if (key === "needs") {
     const present = [...new Set(rows.map((row) => row.values.needs).filter(Boolean))];
     return { color: (value) => NEED_COLORS[value] || "#8f7d86", legend: present.map((id) => ({ color: NEED_COLORS[id] || "#8f7d86", label: needLabel(id) })) };
+  }
+  if (key === "occupation") {
+    const present = [...new Set(rows.map((row) => row.values.occupation).filter(Boolean))];
+    return { color: (value) => OCCUPATION_COLORS[value] || "#8f7d86", legend: present.map((id) => ({ color: OCCUPATION_COLORS[id] || "#8f7d86", label: OCCUPATION_LABELS[id] || id })) };
   }
   if (key === "changeGov" || key === "changePres") {
     const color = (value) => DIV[CHANGE_BINS.findIndex((edge) => value < edge) === -1 ? 4 : CHANGE_BINS.findIndex((edge) => value < edge)];
@@ -113,20 +122,47 @@ async function fetchWardBoundaries(lgaName, token, signal) {
   return { wards: { features: [] } };
 }
 
+/** Who is on the register here: age bands, women, main occupations, phone on file, disability. */
+function RegisterBlock({ register }) {
+  const peak = Math.max(...register.ages.map((band) => band.share || 0), 0.01);
+  return (
+    <div className="smp-register">
+      <span>Voter register · {num(register.voters)} voters</span>
+      <div className="smp-register-row">
+        <b>Age</b>
+        <div className="smp-register-bars">
+          {register.ages.map((band) => (
+            <i key={band.label} title={`${band.label}: ${pct(band.share)}`}>
+              <strong>{pct(band.share)}</strong>
+              <em><u style={{ height: `${Math.max(Math.round(((band.share || 0) / peak) * 100), 3)}%` }} /></em>
+              <small>{band.label}</small>
+            </i>
+          ))}
+        </div>
+      </div>
+      <div className="smp-register-row"><b>Women</b><p>{pct(register.women)} · men {pct(register.women == null ? null : 1 - register.women)}</p></div>
+      <div className="smp-register-row"><b>Occupation</b><p>{register.occupations.filter((item) => item.id !== "other").slice(0, 4).map((item) => `${item.label} ${pct(item.share)}`).join(" · ")}</p></div>
+      <div className="smp-register-row"><b>Phone on file</b><p>{pct(register.phone)}{register.disability ? ` · ${num(register.disability)} with a disability` : ""}</p></div>
+    </div>
+  );
+}
+
 function AreaCard({ area, data, selected, measure, onOpen }) {
   const { level, layers, context } = data;
   if (!area) return null;
   const v = area.values;
   const d = area.detail || {};
+  // Inside an LGA the card starts on that LGA (the context row) until a ward is picked.
+  const kind = area === context ? "lga" : level;
   // History rows get their own line with the winner, so they are not repeated as bare shares.
-  const rows = [...new Set([measure, ...selected])].filter((key) => key && key !== "needs" && v[key] !== undefined && !(key === "gov2023" && d.gov2023) && !(key === "pres2023" && d.pres2023));
+  const rows = [...new Set([measure, ...selected])].filter((key) => key && key !== "needs" && key !== "occupation" && v[key] !== undefined && !(key === "gov2023" && d.gov2023) && !(key === "pres2023" && d.pres2023));
   const labelOf = (key) => layers[key]?.label || data.comparisons[key]?.label || (key === "priority" ? "Priority score" : key);
   return (
     <section className="smp-card">
       <header>
         <div>
-          <h3>{area.number && level === "pu" ? `PU ${String(area.number).padStart(3, "0")} · ` : ""}{area.name}</h3>
-          <p>{level === "lga" ? `LGA · ${num(area.wards)} wards · ${num(area.pollingUnits)} polling units` : level === "ward" ? `Ward ${area.number} · ${num(area.pollingUnits)} polling units` : `${area.code || ""}${d.accredited ? ` · ${num(d.accredited)} accredited in 2023` : ""}`}</p>
+          <h3>{area.number && kind === "pu" ? `PU ${String(area.number).padStart(3, "0")} · ` : ""}{area.name}</h3>
+          <p>{kind === "lga" ? `LGA · ${num(area.wards)} wards · ${num(area.pollingUnits)} polling units` : kind === "ward" ? `Ward ${area.number} · ${num(area.pollingUnits)} polling units` : `${area.code || ""}${d.accredited ? ` · ${num(d.accredited)} accredited in 2023` : ""}`}</p>
         </div>
         {onOpen && <button type="button" className="smp-open" onClick={onOpen}>{level === "lga" ? "Open wards →" : "Open polling units →"}</button>}
       </header>
@@ -136,7 +172,7 @@ function AreaCard({ area, data, selected, measure, onOpen }) {
         ))}
         {d.gov2023 && selected.includes("gov2023") && <div><dt>2023 Governorship</dt><dd>{d.gov2023.winner} won · APC {pct(d.gov2023.apc)} · PDP {pct(d.gov2023.pdp)}</dd></div>}
         {d.pres2023 && selected.includes("pres2023") && <div><dt>2023 Presidential</dt><dd>{d.pres2023.winner} won · APC {pct(d.pres2023.apc)}{d.pres2023.parties ? ` · PDP ${pct(d.pres2023.pdp)}` : ""}</dd></div>}
-        {d.survey && selected.some((key) => ["support", "undecided"].includes(key)) && <div><dt>Survey</dt><dd>{num(d.survey.responses)} answers{d.survey.leader ? ` · ${d.survey.leader.split(" ").slice(-1)[0]} leads` : ""}</dd></div>}
+        {d.survey && selected.includes("undecided") && <div><dt>Survey</dt><dd>{num(d.survey.responses)} answers{d.survey.leader ? ` · ${d.survey.leader.split(" ").slice(-1)[0]} leads` : ""}</dd></div>}
       </dl>
       {selected.includes("needs") && d.needs?.length > 0 && (
         <div className="smp-needs">
@@ -144,8 +180,9 @@ function AreaCard({ area, data, selected, measure, onOpen }) {
           {d.needs.slice(0, 4).map((need) => <i key={need.id} style={{ borderColor: NEED_COLORS[need.id] }} title={`Survey ${need.survey == null ? "—" : pct(need.survey)} · callers ${need.callers}`}>{need.label}<b>{need.survey != null ? ` ${pct(need.survey)}` : ""}{need.callers ? ` · ${need.callers} call${need.callers === 1 ? "" : "s"}` : ""}</b></i>)}
         </div>
       )}
-      {level !== "lga" && context && (
-        <p className="smp-context">{context.name} (LGA): {context.values.support != null ? `Sen. Alli ${pct(context.values.support)} in the survey · ` : ""}{context.detail.needs?.length ? `top needs ${context.detail.needs.slice(0, 2).map((need) => need.label.toLowerCase()).join(", ")}` : ""}</p>
+      {d.register && selected.some((key) => REGISTER_KEYS.includes(key)) && <RegisterBlock register={d.register} />}
+      {kind !== "lga" && context?.detail.needs?.length > 0 && (
+        <p className="smp-context">{context.name} (LGA): top needs {context.detail.needs.slice(0, 2).map((need) => need.label.toLowerCase()).join(", ")}</p>
       )}
     </section>
   );
@@ -157,7 +194,8 @@ export default function SentimentMapTab({ authToken, initialLga = null }) {
   const [selected, setSelected] = useState(DEFAULT_LAYERS);
   const [colourBy, setColourBy] = useState("membersPerPu");
   const [view, setView] = useState("layers");
-  const [hovered, setHovered] = useState(null);
+  // The area whose figures show on the right: set by a click, cleared when the level changes.
+  const [picked, setPicked] = useState(null);
   const [basemap, setBasemap] = useState(() => { try { return localStorage.getItem("smp-basemap") || "street"; } catch { return "street"; } });
   const tileRef = useRef(null);
   const [fitRef, fitHeight] = useFitHeight();
@@ -218,19 +256,20 @@ export default function SentimentMapTab({ authToken, initialLga = null }) {
 
   const drill = (row) => {
     if (!row) return;
-    setHovered(null);
+    setPicked(null);
     if (level === "lga") setLga({ key: row.key, name: row.name });
     else if (level === "ward") setWard({ number: row.number, name: row.name });
   };
   const goTo = (target) => {
-    setHovered(null);
+    setPicked(null);
     if (target === "lga") { setLga(null); setWard(null); }
     if (target === "ward" && lga) setWard(null);
   };
 
   useEffect(() => {
     if (!mapNode.current || mapRef.current) return;
-    const map = L.map(mapNode.current, { zoomControl: true, scrollWheelZoom: true, zoomSnap: 0.25 }).setView([8.1, 3.6], 8);
+    // Double-click opens an area (see below), so it must not also zoom the map.
+    const map = L.map(mapNode.current, { zoomControl: true, scrollWheelZoom: true, zoomSnap: 0.25, doubleClickZoom: false }).setView([8.1, 3.6], 8);
     mapRef.current = map;
     const observer = new ResizeObserver(() => map.invalidateSize());
     observer.observe(mapNode.current);
@@ -269,11 +308,11 @@ export default function SentimentMapTab({ authToken, initialLga = null }) {
         const row = item?.row;
         const name = row?.name || feature.properties?.ward || featureLgaName(feature) || "Area";
         const lines = row ? [...new Set([measure, ...selected])].filter((key) => row.values[key] !== undefined).slice(0, 6).map((key) => `${escapeHtml(data.layers[key]?.label || data.comparisons[key]?.label || "Priority")}: <b>${escapeHtml(formatValue(key, row.values[key], data.layers[key]))}</b>`) : ["No data matched to this boundary"];
-        layer.bindTooltip(`<b>${escapeHtml(name)}</b><br>${lines.join("<br>")}${row && level !== "pu" ? `<br><i>Click to open ${level === "lga" ? "its wards" : "its polling units"}</i>` : ""}`, { sticky: true, className: "smp-tip" });
+        layer.bindTooltip(`<b>${escapeHtml(name)}</b><br>${lines.join("<br>")}${row ? `<br><i>Click for details${level !== "pu" ? ` · double-click to open ${level === "lga" ? "its wards" : "its polling units"}` : ""}</i>` : ""}`, { sticky: true, className: "smp-tip" });
         if (row) {
           layer.on("add", () => layer.getElement()?.setAttribute("data-area", row.key));
-          layer.on("mouseover", () => setHovered(row));
-          layer.on("click", () => drill(row));
+          layer.on("click", () => setPicked(row));
+          layer.on("dblclick", () => drill(row));
         }
       },
     }).addTo(group);
@@ -289,8 +328,8 @@ export default function SentimentMapTab({ authToken, initialLga = null }) {
         }
         L.circleMarker(center, { radius: 4 + Math.sqrt(value / dotMax) * 16, color: "#0b2a3a", weight: 1, fillColor: "#5ec8ff", fillOpacity: 0.75 })
           .bindTooltip(`${escapeHtml(item.row.name)}: ${escapeHtml(formatValue(dotKey, value, data.layers[dotKey]))} ${escapeHtml(data.layers[dotKey].label.toLowerCase())}`)
-          .on("mouseover", () => setHovered(item.row))
-          .on("click", () => drill(item.row))
+          .on("click", () => setPicked(item.row))
+          .on("dblclick", () => drill(item.row))
           .addTo(group);
       }
     }
@@ -321,7 +360,7 @@ export default function SentimentMapTab({ authToken, initialLga = null }) {
     if (bounds.isValid()) map.fitBounds(bounds, { padding: [16, 16] });
     placeLabels();
     return () => { map.off("zoomend", placeLabels); group.remove(); };
-    // drill/setHovered are stable enough for this effect; re-running on them would refit the map.
+    // drill/setPicked are stable enough for this effect; re-running on them would refit the map.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, features, scale, measure, selected, dotKey, level]);
 
@@ -330,8 +369,10 @@ export default function SentimentMapTab({ authToken, initialLga = null }) {
 
   const toggle = (key) => setSelected((current) => (current.includes(key) ? current.filter((item) => item !== key) : [...current, key]));
   const totals = data.totals;
-  const pillValue = { population: "est.", registered: compact(totals.registered), members: compact(totals.members), agents: compact(totals.agents), volunteers: compact(totals.volunteers), contacts: compact(totals.contacts), calls: compact(totals.calls) };
-  const card = hovered || (level === "lga" ? null : level === "ward" ? data.context : null);
+  const pillValue = { population: "est.", registered: compact(totals.registered), members: compact(totals.members), tenx: totals.tenx != null ? compact(totals.tenx) : null, contacts: compact(totals.contacts), calls: compact(totals.calls) };
+  // Always the latest figures for the picked area (a refetch replaces the row objects).
+  const pickedRow = picked ? rows.find((row) => row.key === picked.key) || null : null;
+  const card = pickedRow || (level === "ward" ? data.context : null);
   const boundaryMissing = level === "lga" ? lgaBoundaries.isError || !lgaBoundaries.data?.lgas : wardBoundaries.isFetched && !features.length;
 
   return (
@@ -341,7 +382,7 @@ export default function SentimentMapTab({ authToken, initialLga = null }) {
           <button type="button" onClick={() => goTo("lga")} className={level === "lga" ? "on" : ""}>Oyo State</button>
           {lga && <><span>›</span><button type="button" onClick={() => goTo("ward")} className={level === "ward" ? "on" : ""}>{lga.name}</button></>}
           {ward && <><span>›</span><b>{data.ward?.name || ward.name}</b></>}
-          <small>{level === "lga" ? "click an LGA to open its wards" : level === "ward" ? "click a ward to open its polling units" : "polling units of this ward"}</small>
+          <small>{level === "lga" ? "click an LGA for details · double-click to open its wards" : level === "ward" ? "click a ward for details · double-click to open its polling units" : "click a polling unit for details"}</small>
         </nav>
         <div className="smp-controls">
           <label>Colour by
@@ -375,10 +416,10 @@ export default function SentimentMapTab({ authToken, initialLga = null }) {
                   className={`smp-pill${selected.includes(key) ? " on" : ""}${group === "History" ? " hist" : ""}${off ? " off" : ""}${!here ? " dim" : ""}`}
                   aria-pressed={selected.includes(key)}
                   disabled={off}
-                  title={off ? "Not loaded yet: upload it in Tools → Manage Data" : !here ? `Shown at ${layer.levels.map((item) => LEVEL_NAMES[item]).join(" / ")} level` : ""}
+                  title={off ? layer.hint || "Not loaded yet: upload it in Tools → Manage Data" : !here ? `Shown at ${layer.levels.map((item) => LEVEL_NAMES[item]).join(" / ")} level` : ""}
                   onClick={() => toggle(key)}
                 >
-                  <span className="smp-box" />{layer.label}{off ? <em>upload</em> : pillValue[key] && <em>{pillValue[key]}</em>}
+                  <span className="smp-box" />{layer.label}{off ? <em>{layer.source === "oyo10x" ? "not yet" : "upload"}</em> : pillValue[key] && <em>{pillValue[key]}</em>}
                 </button>
               );
             })}
@@ -412,7 +453,7 @@ export default function SentimentMapTab({ authToken, initialLga = null }) {
                   const fill = value == null ? NO_DATA : scale.color(value);
                   const dark = DEEP.has(fill);
                   return (
-                    <button key={row.key} type="button" onMouseEnter={() => setHovered(row)} onFocus={() => setHovered(row)} style={{ background: fill, color: dark ? "#f7eff2" : "#2b0816" }} className={!row.values.members ? "none" : ""} title={`${row.name} · ${formatValue(measure, value, measureMeta)}`}>
+                    <button key={row.key} type="button" onClick={() => setPicked(row)} aria-pressed={pickedRow?.key === row.key} style={{ background: fill, color: dark ? "#f7eff2" : "#2b0816" }} className={`${!row.values.members ? "none" : ""}${pickedRow?.key === row.key ? " picked" : ""}`} title={`${row.name} · ${formatValue(measure, value, measureMeta)}`}>
                       {String(row.number).padStart(3, "0")}
                     </button>
                   );
@@ -424,11 +465,13 @@ export default function SentimentMapTab({ authToken, initialLga = null }) {
 
         <aside className="smp-side">
           {card ? <AreaCard area={card} data={data} selected={selected} measure={measure} onOpen={level !== "pu" && card !== data.context ? () => drill(card) : null} />
-            : <section className="smp-card"><header><div><h3>{level === "lga" ? "All 33 LGAs" : data.ward?.name}</h3><p>Hover an area to see its figures</p></div></header>
+            : <section className="smp-card"><header><div><h3>{level === "lga" ? "All 33 LGAs" : data.ward?.name}</h3><p>Click an area to see its figures</p></div></header>
               <dl>
                 <div><dt>Registered voters</dt><dd>{num(level === "lga" ? totals.registered : data.ward?.registered)}</dd></div>
-                {level === "lga" && <><div><dt>Members</dt><dd>{num(totals.members)}</dd></div><div><dt>Contacts in our possession</dt><dd>{num(totals.contacts)}</dd></div><div><dt>Contact-center calls</dt><dd>{num(totals.calls)}</dd></div></>}
-              </dl></section>}
+                {level === "lga" && <><div><dt>APC confirmed members</dt><dd>{num(totals.members)}</dd></div><div><dt>10x volunteers</dt><dd>{totals.tenx != null ? num(totals.tenx) : "oyo10x not connected"}</dd></div><div><dt>Contacts in our possession</dt><dd>{num(totals.contacts)}</dd></div><div><dt>Call center calls</dt><dd>{num(totals.calls)}</dd></div></>}
+              </dl>
+              {level === "pu" && data.ward?.register && selected.some((key) => REGISTER_KEYS.includes(key)) && <RegisterBlock register={data.ward.register} />}
+              </section>}
           <section className="smp-card">
             <h3>Where to act</h3>
             <p className="smp-sub">{level === "pu" ? "Units that most need a member" : "Ranked by the priority score"}</p>
@@ -438,7 +481,7 @@ export default function SentimentMapTab({ authToken, initialLga = null }) {
                   const row = rows.find((entry) => entry.key === item.key);
                   return (
                     <li key={item.key}>
-                      <button type="button" onClick={() => (level === "pu" ? setHovered(row) : drill(row))} onMouseEnter={() => row && setHovered(row)}>
+                      <button type="button" onClick={() => row && setPicked(row)} onDoubleClick={() => level !== "pu" && drill(row)} title={level === "pu" ? "Click for details" : "Click for details · double-click to open"}>
                         <i>{index + 1}</i><span>{level === "pu" ? `PU ${String(item.number).padStart(3, "0")} ${item.name}` : item.name}</span><b>{item.reasons.join(" · ")}</b>
                       </button>
                     </li>

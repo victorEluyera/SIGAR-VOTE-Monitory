@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWardMatcher, wardByName, wardNumber } from '../../../shared/wardMatch.js';
-import { baselineSurvey, withBaseline } from './baseline.js';
+import { baselineRegister, baselineSurvey, withBaseline } from './baseline.js';
 import { oyoGeo, wardResolver } from './geo.js';
 import { buildMap } from './map.js';
 
@@ -51,6 +51,53 @@ test('map: LGA layers join ground work, survey, needs and 2023 history', () => {
   assert.equal(map.layers.pvc.loaded, false, 'PVCs by LGA need an upload');
   assert.ok(map.insights.some((item) => /blind spots/.test(item.text)));
   assert.ok(map.ranking.length > 0 && map.ranking[0].reasons.length > 0);
+});
+
+test('map: register layers at every level, 10x volunteers, and no support or agent/volunteer layers', () => {
+  const register = baselineRegister();
+  assert.equal(register.total, 3_276_307);
+  assert.equal(Object.keys(register.lgas).length, 33);
+  assert.equal(Object.values(register.lgas).reduce((sum, lga) => sum + Object.keys(lga.wards).length, 0), 351, 'every INEC ward placed');
+  assert.ok(!/0[789]\d{9}/.test(JSON.stringify(register)), 'register totals carry no phone numbers');
+
+  const map = buildMap({ datasets: withBaseline([]), survey: baselineSurvey(), register });
+  for (const gone of ['support', 'agents', 'volunteers']) assert.equal(map.layers[gone], undefined, `${gone} layer removed`);
+  assert.equal(map.comparisons.changeGov, undefined, 'comparisons built on support removed');
+  assert.equal(map.layers.members.label, 'APC confirmed members');
+  assert.equal(map.layers.reached.label, 'Polling units reached');
+  assert.equal(map.layers.calls.label, 'Call center reached');
+  assert.equal(map.totals.registered, 3_276_307);
+  const oluyole = map.rows.find((row) => row.key === 'OLUYOLE');
+  assert.equal(oluyole.values.registered, 130_659, 'registered voters from the full register');
+  for (const key of ['women', 'youth', 'middleAge', 'older', 'phone']) assert.ok(oluyole.values[key] > 0 && oluyole.values[key] < 1, key);
+  assert.ok(oluyole.values.occupation && oluyole.values.occupation !== 'other');
+  assert.equal(oluyole.detail.register.ages.length, 6);
+  assert.equal(oluyole.values.tenx, null, 'oyo10x not connected: no 10x figure, not zero');
+  assert.equal(map.layers.tenx.loaded, false);
+  assert.match(map.layers.tenx.hint, /not connected/);
+
+  const wards = buildMap({ datasets: withBaseline([]), survey: baselineSurvey(), register, lga: 'Ibadan South-East' });
+  assert.ok(wards.rows.every((row) => row.values.registered > 0 && row.values.women != null), 'every ward, including "S 7B"-style names, has register figures');
+  const units = buildMap({ datasets: withBaseline([]), survey: baselineSurvey(), register, lga: 'Ogbomoso North', ward: '3' });
+  assert.ok(units.rows.filter((row) => row.detail.register).length >= 30, 'polling units carry register figures');
+  assert.ok(units.ward.register.voters > 10_000);
+});
+
+test('map: 10x volunteers are placed by LGA and ward when oyo10x reports them', () => {
+  const tenx = {
+    totals: { registered: 900, verified: 600 },
+    byLga: [{ name: 'Atiba', members: 400 }, { name: 'Ogbomosho North', members: 500 }],
+    byWard: [{ lga: 'Ogbomoso North', name: 'AGUODO/ MASIFA', members: 120 }],
+    byPollingUnit: [],
+  };
+  const map = buildMap({ datasets: [], tenx });
+  assert.equal(map.totals.tenx, 900);
+  assert.equal(map.rows.find((row) => row.key === 'ATIBA').values.tenx, 400);
+  assert.equal(map.rows.find((row) => row.key === 'OGBOMOSO NORTH').values.tenx, 500, 'LGA spellings matched');
+  assert.equal(map.rows.find((row) => row.key === 'IREPO').values.tenx, 0, 'connected but none reported: zero');
+  assert.equal(map.layers.tenx.loaded, true);
+  const wards = buildMap({ datasets: [], tenx, lga: 'Ogbomoso North' });
+  assert.equal(wards.rows.find((row) => row.number === 3).values.tenx, 120);
 });
 
 test('map: drilling into wards and polling units keeps members and calls placed', () => {

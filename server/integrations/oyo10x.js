@@ -24,6 +24,11 @@ const BACKOFF_MAX_MS = 15 * 60_000;
 const isTestRecord = (name) => /\(delete me\)|^test\b/i.test(String(name || '').trim());
 
 const count = (value) => (Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : 0);
+// One area's aggregate counts; `label` picks the place-name fields that area type carries.
+const areaRows = (rows, label) => (Array.isArray(rows) ? rows : [])
+  .filter((row) => !isTestRecord(row?.name))
+  .map((row) => ({ ...label(row), members: count(row?.members ?? row?.registered), verified: count(row?.verified), unitPromoters: count(row?.unit_promoters), grassroots: count(row?.grassroots) }))
+  .filter((row) => row.name);
 
 export function sanitizeOyo10x(raw = {}) {
   const summary = raw.summary || {};
@@ -75,6 +80,16 @@ export function sanitizeOyo10x(raw = {}) {
       grassroots: count(row?.grassroots),
       wards: count(row?.wards),
       pollingUnits: count(row?.polling_units),
+    })),
+    // Volunteers per LGA, ward and polling unit, for the sentiment map. Counts and place names
+    // only -- the same aggregate shape as the district rows above.
+    byLga: areaRows(raw.coverage?.by_lga, (row) => ({ name: String(row?.name || row?.lga || '') })),
+    byWard: areaRows(raw.coverage?.by_ward, (row) => ({ name: String(row?.name || row?.ward || ''), lga: String(row?.lga || '') })),
+    byPollingUnit: areaRows(raw.coverage?.by_polling_unit, (row) => ({
+      name: String(row?.name || row?.polling_unit || ''),
+      code: String(row?.code || row?.polling_unit_code || ''),
+      ward: String(row?.ward || ''),
+      lga: String(row?.lga || ''),
     })),
     registrationsPerDay: (Array.isArray(report.registrations_per_day) ? report.registrations_per_day : [])
       .map((row) => ({ date: String(row?.date || row?.day || ''), count: count(row?.count ?? row?.registrations) }))
@@ -163,6 +178,7 @@ export function createOyo10xClient({
 
 const VIEW_ROLES = ['Admin', 'Super Admin', 'Stakeholder'];
 
+/** Registers the route and returns the client, so other modules share its cache and back-off. */
 export function registerOyo10xRoutes({ app, auth, rateLimit, asyncRoute, client = createOyo10xClient() }) {
   if (!client.configured)
     console.warn('[oyo10x] OYO10X_API_URL / OYO10X_API_KEY not set: the grassroots mobilisation panel will show as not connected.');
@@ -178,4 +194,5 @@ export function registerOyo10xRoutes({ app, auth, rateLimit, asyncRoute, client 
       res.json(await client.snapshot());
     }),
   );
+  return client;
 }

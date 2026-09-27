@@ -61,7 +61,9 @@ function referenceView(reference, lga) {
       : STATE_BASELINE[field];
   }
   out.pvcRate = ratio(out.pvcCollected?.value, out.registeredVoters?.value);
-  out.lgaLevelLoaded = Object.keys(values).length;
+  // LGAs with population or PVC figures -- what the "loaded for N of 33" notices are about. A
+  // registered-voters-only table (from the voter register) does not count.
+  out.lgaLevelLoaded = Object.values(values).filter((entry) => entry.population != null || entry.pvcCollected != null).length;
   return out;
 }
 
@@ -322,7 +324,21 @@ function insightsFor({ lga, survey, members, contacts, reference, rows, center }
   return out.sort((a, b) => order[a.tone] - order[b.tone]);
 }
 
-export function buildPulse({ datasets = [], survey = null, lga = '' }) {
+/**
+ * 10x volunteers from the oyo10x snapshot: the state total, or one LGA when oyo10x reports by LGA.
+ * { available: false } when oyo10x is not connected.
+ */
+function tenxView(tenx, lga) {
+  if (!tenx) return { available: false };
+  const updatedAt = tenx.sourceGeneratedAt || null;
+  if (!lga) return { available: true, total: tenx.totals.registered, verified: tenx.totals.verified, unitPromoters: tenx.totals.unitPromoters, grassroots: tenx.totals.grassroots, updatedAt };
+  const row = (tenx.byLga || []).find((item) => matchLga(item.name) === lga);
+  return row
+    ? { available: true, total: row.members, verified: row.verified, unitPromoters: row.unitPromoters, grassroots: row.grassroots, updatedAt }
+    : { available: true, total: null, byLgaMissing: true, updatedAt };
+}
+
+export function buildPulse({ datasets = [], survey = null, lga = '', tenx = null }) {
   const wanted = lga ? matchLga(lga) : '';
   const memberSets = datasets.filter((item) => item.kind === 'members');
   const contactSet = latest(datasets.filter((item) => item.kind === 'contacts'));
@@ -377,6 +393,7 @@ export function buildPulse({ datasets = [], survey = null, lga = '' }) {
     reference: ref,
     members: membersOut,
     contacts,
+    tenx: tenxView(tenx, wanted),
     survey: scopedSurvey,
     contactCenter: center,
     byLga: rows,

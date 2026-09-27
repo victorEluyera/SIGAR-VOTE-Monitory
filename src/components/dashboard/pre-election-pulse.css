@@ -30,7 +30,7 @@
 .pep-link { padding: 7px 12px; border: 1px solid var(--pep-rule); border-radius: 8px; background: transparent; color: var(--pep-gold-bright); font: inherit; font-size: 12px; cursor: pointer; }
 .pep-link:hover { border-color: var(--pep-gold); }
 
-.pep-kpis { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; }
+.pep-kpis { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 8px; }
 .pep-kpi { display: grid; gap: 2px; padding: 9px 11px; border: 1px solid var(--pep-rule); border-radius: 10px; background: var(--pep-surface); min-width: 0; }
 .pep-kpi span { font-size: 10.5px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--pep-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Labels may take two lines (e.g. "Contacts in our possession") rather than be cut off. */
@@ -120,7 +120,7 @@
   .pep-bars { gap: 5px; }
 }
 @media (max-width: 1280px) {
-  .pep-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .pep-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .pep-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(240px, 1.1fr); grid-template-rows: repeat(3, minmax(0, 1fr)); }
   .pep-insights { grid-column: 3; grid-row: 1 / span 3; }
 }
@@ -183,6 +183,7 @@
 .pep-kpis .pep-kpi:nth-child(6) { --accent: #6cc070; }
 .pep-kpis .pep-kpi:nth-child(7) { --accent: #e8914a; }
 .pep-kpis .pep-kpi:nth-child(8) { --accent: #4fc3dc; }
+.pep-kpis .pep-kpi:nth-child(9) { --accent: #c084fc; }
 .pep-grid > .pep-panel:nth-child(1) { --accent: #3fb5a3; }
 .pep-grid > .pep-panel:nth-child(2) { --accent: #c9748f; }
 .pep-grid > .pep-panel:nth-child(3) { --accent: #d9aa4b; }

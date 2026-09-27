@@ -47,7 +47,8 @@
 .smp-pill.off { opacity: 0.45; cursor: not-allowed; }
 .smp-pill.off em { background: #2a0e17; color: #a8929c; }
 
-.smp-main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 10px; }
+/* Info panel: 30% of the width, never narrower than 280px so the cards stay readable. */
+.smp-main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 30%); gap: 10px; }
 .smp-map-wrap { position: relative; min-height: 0; border: 1px solid var(--smp-rule); border-radius: 12px; overflow: hidden; background: #1a0710; }
 .smp-map { position: absolute; inset: 0; }
 .smp-label { background: none; border: 0; }
@@ -85,6 +86,19 @@
 .smp-needs i { padding: 2px 7px; border: 1px solid; border-radius: 999px; font-style: normal; color: #ffe9dc; }
 .smp-needs i b { font-weight: 500; color: var(--smp-muted); }
 .smp-context { margin: 8px 0 0; font-size: 11px; color: var(--smp-muted); }
+/* Voter register breakdown on the area card: age bands as small columns, then one line per measure. */
+.smp-register { display: grid; gap: 6px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--smp-rule); font-size: 11.5px; }
+.smp-register > span { color: var(--smp-muted); }
+.smp-register-row { display: grid; grid-template-columns: 84px 1fr; gap: 8px; align-items: start; }
+.smp-register-row b { font-weight: 600; color: var(--smp-muted); }
+.smp-register-row p { margin: 0; color: var(--smp-ink); }
+.smp-register-bars { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
+.smp-register-bars i { display: grid; justify-items: center; gap: 2px; font-style: normal; }
+.smp-register-bars strong { font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.smp-register-bars em { display: flex; align-items: flex-end; width: 100%; height: 34px; border-radius: 3px; background: var(--smp-sunk); }
+.smp-register-bars u { display: block; width: 100%; border-radius: 3px; background: var(--smp-gold); text-decoration: none; }
+.smp-register-bars small { font-size: 9.5px; color: var(--smp-muted); white-space: nowrap; }
+.smp-units button.picked { border-color: #fff; box-shadow: 0 0 0 2px var(--smp-gold-bright); }
 .smp-rank { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
 .smp-rank button { width: 100%; display: grid; grid-template-columns: 16px 1fr; gap: 1px 6px; padding: 4px 0; border: 0; border-bottom: 1px solid #2e0e19; background: none; color: var(--smp-ink); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
 .smp-rank i { grid-row: span 2; color: #8f7d86; font-style: normal; }
@@ -100,9 +114,6 @@
 .smp-intel li.info span { color: var(--smp-muted); }
 .smp-source { margin: 8px 0 0; font-size: 10px; color: #8f7d86; }
 
-@media (max-width: 1100px) {
-  .smp-main { grid-template-columns: minmax(0, 1fr) 300px; }
-}
 @media (max-width: 900px) {
   .smp { height: auto; min-height: 0; }
   .smp-main { grid-template-columns: 1fr; }

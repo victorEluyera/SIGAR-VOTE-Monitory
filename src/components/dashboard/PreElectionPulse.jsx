@@ -219,7 +219,8 @@ function GroundPanel({ data, onPick }) {
         <Bars rows={[
           { name: "Units covered", value: members.unitCoverage || 0, label: `${num(members.unitsCovered)} / ${num(members.pollingUnits)}`, color: FOCUS },
           { name: "Wards reached", value: members.wardsTotal ? members.wardsCovered / members.wardsTotal : 0, label: `${num(members.wardsCovered)} / ${num(members.wardsTotal)}`, color: "#d9aa4b" },
-          ...members.groups.map((group) => ({ name: group.label, value: group.people / Math.max(members.total, 1), label: num(group.people), color: "#c9748f" })),
+          // One bar per list only when there is more than one list to compare.
+          ...(members.groups.length > 1 ? members.groups : []).map((group) => ({ name: group.label, value: group.people / Math.max(members.total, 1), label: num(group.people), color: "#c9748f" })),
         ]} max={1} />
         {survey.available && <p className="pep-note">Survey: {num(survey.responses)} responses{survey.candidates[0] ? `, ${survey.candidates[0].short} leads with ${pct(survey.candidates[0].share)}` : ""}.</p>}
       </Panel>
@@ -279,6 +280,7 @@ export default function PreElectionPulse({ authToken, onOpenData }) {
 
   const data = query.data;
   const { survey, members, contacts, reference, register } = data;
+  const tenx = data.tenx || { available: false };
   const leader = survey.available ? survey.candidates[0] : null;
   const runnerUp = survey.available ? survey.candidates[1] : null;
 
@@ -305,8 +307,9 @@ export default function PreElectionPulse({ authToken, onOpenData }) {
       <div className="pep-kpis">
         <Kpi label="Poll leader" value={leader ? leader.short : "—"} sub={leader ? pct(leader.share, 1) : "no survey yet"} tone="lead" />
         <Kpi label="Survey responses" value={survey.available ? num(survey.responses) : "—"} sub={survey.available ? ago(survey.updatedAt) : "not loaded"} />
-        <Kpi label="Confirmed members" value={members.available ? num(members.total) : "—"} sub={members.available ? "member records uploaded" : "not loaded"} />
-        <Kpi label="PUs reached" value={members.available ? num(members.unitsCovered) : "—"} sub={`of ${num(register.pollingUnits)}${members.available ? ` · ${pct(members.unitCoverage)}` : ""}`} tone={members.available && members.unitCoverage < 0.5 ? "warn" : ""} />
+        <Kpi label="APC confirmed members" value={members.available ? num(members.total) : "—"} sub={members.available ? "APC member records" : "not loaded"} />
+        <Kpi label="10x volunteers" value={tenx.available && tenx.total != null ? num(tenx.total) : "—"} sub={!tenx.available ? "oyo10x not connected" : tenx.total == null ? "no LGA figures from oyo10x yet" : `${num(tenx.verified)} verified · from oyo10x`} />
+        <Kpi label="Polling units reached" value={members.available ? num(members.unitsCovered) : "—"} sub={`of ${num(register.pollingUnits)}${members.available ? ` · ${pct(members.unitCoverage)}` : ""}`} tone={members.available && members.unitCoverage < 0.5 ? "warn" : ""} />
         <Kpi label="Registered voters" value={compact(reference.registeredVoters?.value)} sub={reference.registeredVoters ? "registered" : "not loaded"} />
         <Kpi label="PVCs collected" value={compact(reference.pvcCollected?.value)} sub={reference.pvcRate != null ? `${pct(reference.pvcRate, 1)} of register` : "not loaded"} />
         <Kpi label="Population" value={compact(reference.population?.value)} sub={reference.population ? (reference.population.basis === "estimate" ? "estimate" : data.filter.lga ? "uploaded" : "population") : "not loaded"} />

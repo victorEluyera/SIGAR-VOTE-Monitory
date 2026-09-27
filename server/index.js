@@ -264,9 +264,9 @@ const { IREV_OYO_ELECTION_ID, loadOyoIrev, loadOsunIrevPilot } = registerIrevInt
 registerIntelligenceRoutes({ app, auth, adminOnly, rateLimit, asyncRoute, store, canAccessGeography, reverseLocation, openAiPrimaryModel, openAiFallbackModel, groqPrimaryModel, groqFallbackModel, groqNewsModel, callGroq, callGroqWithFallback, normalizeNewsTitle, normalizeNewsDate, isOyoStateNews });
 registerReportingRoutes({ app, auth, adminOnly, rateLimit, asyncRoute, store, canAccessGeography });
 registerStakeholderRoutes({ app, auth, rateLimit, asyncRoute, store });
-registerOyo10xRoutes({ app, auth, rateLimit, asyncRoute });
+const oyo10x = registerOyo10xRoutes({ app, auth, rateLimit, asyncRoute });
 registerVoterSurveyRoutes({ app, auth, rateLimit, asyncRoute, store, openAiPrimaryModel, openAiFallbackModel, callGroqWithFallback, geminiApiKeys });
-registerPreElectionRoutes({ app, auth, rateLimit, asyncRoute, store, geminiApiKeys, callGroqWithFallback, openAiPrimaryModel });
+registerPreElectionRoutes({ app, auth, rateLimit, asyncRoute, store, geminiApiKeys, callGroqWithFallback, openAiPrimaryModel, oyo10x });
 registerReferenceDataRoutes({ app, auth, adminOnly, rateLimit, asyncRoute, store });
 registerEvidenceRoutes({ app, auth, adminOnly, rateLimit, asyncRoute, store, canAccessIncident });
 

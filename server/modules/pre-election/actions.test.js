@@ -5,14 +5,22 @@ import { aiPrompt, buildFacts, checkAiPlan, QUADRANTS, ruleActions, ruleBrief } 
 import { askModels } from './ai.js';
 import { createPreElectionRepository } from './repository.js';
 
-const state = () => buildFacts({ datasets: withBaseline([]), survey: baselineSurvey() });
+// The rule tests run on the built-in data without the APC member list: with it, almost every
+// polling unit has a member, so the "no ground team" rules they exercise would have nothing to fire on.
+const withoutMembers = () => withBaseline([]).filter((item) => item.kind !== 'members');
+const state = () => buildFacts({ datasets: withoutMembers(), survey: baselineSurvey() });
+
+test('with the APC member list, the facts report its coverage', () => {
+  const { facts } = buildFacts({ datasets: withBaseline([]), survey: baselineSurvey() });
+  assert.match(facts.find((fact) => fact.id === 'M1').fact, /157,289 people; they cover 5,992 of 6,390 polling units/);
+});
 
 test('facts carry the figures from the pulse and the map, each with an id', () => {
   const { facts } = state();
   const byId = Object.fromEntries(facts.map((fact) => [fact.id, fact.fact]));
-  assert.match(byId.M1, /10,658 people; they cover 2,964 of 6,390 polling units/);
+  assert.equal(byId.M1, undefined, 'no member list, no member fact');
   assert.match(byId.C1, /443 still open \(37%\); 82 asked for a follow-up; 343 dropped/);
-  assert.match(byId.G1, /No members in .*Iseyin.*806 polling units and 417,698 registered voters/);
+  assert.match(byId.G1, /No members in Ibadan North.*6,390 polling units and 3,276,307 registered voters/);
   assert.match(byId.G2, /Iseyin \(Sen\. Alli 64%\)/);
   assert.ok(facts.every((fact) => !/0[789]\d{9}/.test(fact.fact)), 'no phone numbers in facts');
 });
@@ -25,14 +33,14 @@ test('rules fill all four quadrants with stable keys, evidence and due dates', (
   assert.equal(first.owner, 'Field operations');
   assert.equal(first.due, 'by 2 Oct');
   assert.deepEqual(first.evidence, ['G1', 'G2']);
-  assert.ok(plan.reduce.some((action) => /Ogbomoso North/.test(action.title)));
+  assert.ok(plan.reduce.some((action) => /Call confirmed supporters less/.test(action.title)));
   assert.equal(ruleActions(state(), { horizon: 'election' }).do_now[0].due, 'within 2 weeks', 'urgent work stays near-term even on the long horizon');
   assert.equal(ruleActions(state(), { horizon: 'election' }).plan[0].due, 'before election day');
-  assert.match(ruleBrief(state()).focus, /^Start with: build ground teams in Ibadan South-East/);
+  assert.match(ruleBrief(state()).focus, /^Start with: build ground teams in Ibadan North/);
 });
 
 test('an LGA scope gets LGA and ward actions', () => {
-  const facts = buildFacts({ datasets: withBaseline([]), survey: baselineSurvey(), lga: 'Iseyin' });
+  const facts = buildFacts({ datasets: withoutMembers(), survey: baselineSurvey(), lga: 'Iseyin' });
   const plan = ruleActions(facts);
   assert.equal(plan.do_now[0].title, 'Build a ground team across all 11 wards of Iseyin');
   assert.ok(plan.do_now.some((action) => action.key === 'rule:lga-no-calls'));
