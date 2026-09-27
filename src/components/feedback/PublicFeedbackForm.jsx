@@ -156,10 +156,13 @@ export default function PublicFeedbackForm({ token }) {
             </select>
           </label>
           <label className="ff-q" htmlFor="q-unit">
-            <span className="ff-label">Polling unit <small>(optional)</small></span>
+            <span className="ff-label">Polling unit <small>(optional)</small> · community</span>
             <select id="q-unit" value={place.unit} disabled={!place.ward} onChange={(event) => setPlace((current) => ({ ...current, unit: event.target.value }))}>
               <option value="">Choose your polling unit</option>
-              {places.units.map((unit) => <option key={unit.number} value={unit.number}>{String(unit.number).padStart(3, "0")} · {unit.name}</option>)}
+              {places.units.map((unit) => {
+                const community = places.wards.find((ward) => ward.number === Number(place.ward))?.name || "";
+                return <option key={unit.number} value={unit.number}>{String(unit.number).padStart(3, "0")} · {unit.name}{community ? ` · ${community}` : ""}</option>;
+              })}
             </select>
           </label>
           {questionsOf("area")}

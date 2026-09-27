@@ -13,8 +13,25 @@ import { matchLga, oyoLgas, lgaLabel } from '../pre-election/lga.js';
 
 export const FORM_VERSION = 2;
 export const FOCUS_CANDIDATE = 'Sen. Sharafadeen Abiodun Alli';
-// Governorship aspirants named in the field survey.
-export const CANDIDATES = [FOCUS_CANDIDATE, 'Oriyomi Hamzat', 'Adebayo Adelabu', 'Olufemi Ajadi Oguntoyinbo', 'Adebo Ogundoyin', 'Saheed Oladele', 'Nureni Aderemi Adeniran', 'Taofeek Arapaja'];
+// Governorship candidates listed for Oyo State.
+export const CANDIDATES = [
+  FOCUS_CANDIDATE,
+  'Olooye Adegboyega Taofeek Adegoke',
+  'Hazeem Gbolarumi',
+  'Abimbola "Bimbo" Adekanmbi',
+  'Yinusa Kazeem Ayandare',
+  'Olasupo Olalekan Abdulsemiu',
+  'Salami Gbolagade',
+  'Aderoju Okunlade Michael',
+  'Hassan Waheed Olanrewaju',
+  'Olatunji Kunle James',
+  'Kareem Thomson Sola',
+  'Tijani Ismaila Akinbode',
+  'Yusuf Akim Adebola',
+  'Adebiyi Adedapo',
+  'Afolabi Taofeek Adedamola',
+  'Taiwo Ibiyemi Otegbeye',
+];
 
 export const SECTIONS = [
   { id: 'you', title: 'About you' },
@@ -33,8 +50,8 @@ export const QUESTIONS = [
   { id: 'topIssue', section: 'issues', n: 3, text: 'What is the single most important issue you want government to address?', options: ['Job Creation', 'Security', 'Agriculture', 'Education', 'Roads & Infrastructure', 'Youth Development', 'Healthcare', 'Power/Energy', 'Other'], required: true },
   { id: 'satisfaction', section: 'issues', n: 4, text: 'Overall, how satisfied are you with the performance of the current government?', options: ['Very Satisfied', 'Satisfied', 'Neutral', 'Dissatisfied', 'Very Dissatisfied'], required: true },
   { id: 'sector', section: 'issues', n: 5, text: 'Which sector needs the most urgent improvement?', options: ['Education', 'Health', 'Economy', 'Agriculture', 'Security', 'Transportation', 'Infrastructure', 'Other'] },
-  { id: 'fairAttention', section: 'area', n: '6a', text: 'Do you believe your LGA is receiving fair attention?', options: ['Yes', 'Partly', 'No', 'Not Sure'] },
-  { id: 'lgaProblem', section: 'area', n: '6b', text: 'What is the biggest problem in your LGA?', options: ['Unemployment', 'Poor Roads', 'Insecurity', 'Business Support', 'Waste', 'Education', 'Healthcare', 'Other'] },
+  { id: 'fairAttention', section: 'area', n: '6a', text: 'Do you believe your community is receiving fair attention?', options: ['Yes', 'Partly', 'No', 'Not Sure'] },
+  { id: 'lgaProblem', section: 'area', n: '6b', text: 'What is the biggest problem in your community?', options: ['Unemployment', 'Poor Roads', 'Insecurity', 'Business Support', 'Waste', 'Education', 'Healthcare', 'Other'] },
   { id: 'communicate', section: 'issues', n: 7, text: 'What would you most want political leaders and candidates to explain more clearly?', options: ['Plans & Policies', 'Achievements', 'Experience', 'Community Development', 'Jobs/Economy', 'Security', 'Infrastructure', 'Anti-Corruption', 'Other'] },
   { id: 'hasPvc', section: 'voting', n: '8a', text: 'Do you have a PVC?', options: ['Yes', 'No', 'Awaiting PVC'], required: true },
   { id: 'votedLast', section: 'voting', n: '8b', text: 'Did you vote in the last election?', options: ['Yes', 'No', 'Prefer Not to Say'] },
@@ -49,6 +66,7 @@ export const QUESTIONS = [
   { id: 'goodGovernor', section: 'candidates', n: '15a', text: `Based on what you know, do you think ${FOCUS_CANDIDATE} would make a good governor?`, options: ['Yes', 'Maybe', 'No', "Don't Know Enough"] },
   { id: 'why', section: 'candidates', n: '15b', text: 'Why do you say so?', type: 'text', maxLength: 280 },
   { id: 'alternative', section: 'candidates', n: '15c', text: 'If not, who else are you considering?', options: [...CANDIDATES.slice(1), 'Undecided', 'None', 'Prefer Not to Say'] },
+  { id: 'anyOtherComment', section: 'candidates', n: '16', text: 'Any other comment?', type: 'text', maxLength: 500 },
   // 16: project ratings (the ward's proposed projects, each 1-10) and 17: facility report are asked by the form itself.
 ];
 
@@ -74,8 +92,8 @@ export const NEED_THEME_OF_ANSWER = {
 export function formDefinition(link) {
   return {
     version: FORM_VERSION,
-    title: 'Have your say on Oyo State',
-    intro: 'This survey is run by the Sen. Sharafadeen Alli campaign to hear what matters in your community. It takes about five minutes. It is anonymous: we do not ask for your name, phone number or voter number.',
+    title: 'Oyo State 10X Community Priorities Survey',
+    intro: 'Have Your Say. Tell Us What Matters. We want to hear from you. This 5-minute anonymous survey by the Sen. Sharafadeen Alli campaign is designed to understand the needs, concerns and priorities of communities across Oyo State. No name. No phone number. No voter number. Just your honest feedback.',
     lga: link.lga ? { key: link.lga, name: lgaLabel(link.lga) } : null,
     lgas: oyoLgas().map((lga) => ({ key: lga.name, name: lgaLabel(lga.name) })),
     sections: SECTIONS,
