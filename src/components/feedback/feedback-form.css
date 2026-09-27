@@ -1,0 +1,66 @@
+/* Public feedback form: phone-first, readable outdoors, one column. The app's body is fixed-height
+   (overflow hidden), so this page scrolls itself. */
+.ff {
+  --ff-bg: #f7f1ea;
+  --ff-card: #ffffff;
+  --ff-ink: #2a0a14;
+  --ff-muted: #6d5560;
+  --ff-rule: #e7d9d0;
+  --ff-wine: #7a1d3c;
+  --ff-gold: #d9aa4b;
+  --ff-soft: #fbf4e6;
+  position: fixed;
+  inset: 0;
+  overflow-y: auto;
+  padding: 16px 16px 48px;
+  background: var(--ff-bg);
+  color: var(--ff-ink);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+@media (prefers-color-scheme: dark) {
+  .ff { --ff-bg: #170610; --ff-card: #220912; --ff-ink: #f7eff2; --ff-muted: #cfa7b3; --ff-rule: #4d1c2c; --ff-wine: #f5dc9a; --ff-soft: #2e0e1a; }
+}
+.ff *, .ff *::before, .ff *::after { box-sizing: border-box; }
+.ff-card { max-width: 640px; margin: 0 auto; padding: 20px; border: 1px solid var(--ff-rule); border-radius: 16px; background: var(--ff-card); display: grid; gap: 18px; }
+/* The app styles bare <header> elements (light text for its dark toolbar); this one is page text. */
+.ff-head { margin: 0; padding: 0 0 12px; border: 0 !important; border-bottom: 3px solid var(--ff-gold) !important; background: none !important; display: block; color: var(--ff-ink); }
+.ff-head span { font-size: 13px; font-weight: 600; color: var(--ff-wine); }
+.ff h1 { margin: 2px 0 8px; font-size: 24px; line-height: 1.2; }
+.ff-head p { margin: 0; color: var(--ff-muted); font-size: 15px; }
+.ff-q { margin: 0; padding: 0; border: 0; display: grid; gap: 10px; }
+.ff-q legend { padding: 0; margin-bottom: 8px; font-weight: 600; font-size: 16px; }
+.ff-req { color: #b8452f; }
+.ff-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.ff-options label { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 14px; border: 1px solid var(--ff-rule); border-radius: 999px; background: var(--ff-soft); cursor: pointer; font-size: 15px; }
+.ff-options label.on { border-color: var(--ff-wine); background: var(--ff-wine); color: #fff; }
+@media (prefers-color-scheme: dark) { .ff-options label.on { color: #2a0a14; } }
+.ff-options input { position: absolute; opacity: 0; pointer-events: none; }
+.ff-options label:focus-within { outline: 2px solid var(--ff-gold); outline-offset: 2px; }
+.ff-selects { display: grid; gap: 10px; }
+.ff-selects label { display: grid; gap: 4px; font-size: 14px; color: var(--ff-muted); }
+.ff select, .ff textarea { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--ff-rule); border-radius: 10px; background: var(--ff-card); color: var(--ff-ink); font: inherit; }
+.ff textarea { resize: vertical; }
+.ff-about { border-top: 1px solid var(--ff-rule); padding-top: 12px; display: grid; gap: 14px; }
+.ff-about summary { cursor: pointer; font-weight: 600; margin-bottom: 12px; }
+.ff-trap { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.ff-error { margin: 0; padding: 10px 12px; border-radius: 10px; background: #fde2dc; color: #861b15; font-size: 14px; }
+.ff-submit { min-height: 50px; border: 0; border-radius: 12px; background: var(--ff-wine); color: #fff; font: inherit; font-size: 17px; font-weight: 700; cursor: pointer; }
+@media (prefers-color-scheme: dark) { .ff-submit { color: #2a0a14; } }
+.ff-submit:disabled { opacity: 0.6; cursor: wait; }
+.ff-note { margin: 0; font-size: 13px; color: var(--ff-muted); text-align: center; }
+.ff-done { text-align: center; }
+.ff-again { justify-self: center; min-height: 44px; padding: 8px 16px; border: 1px solid var(--ff-rule); border-radius: 12px; background: transparent; color: var(--ff-ink); font: inherit; font-size: 15px; cursor: pointer; }
+/* Sections and dropdown questions */
+.ff-section { display: grid; gap: 14px; padding-top: 14px; border-top: 1px solid var(--ff-rule); }
+.ff-section h2 { margin: 0; font-size: 18px; color: var(--ff-wine); }
+.ff-q { display: grid; gap: 6px; }
+.ff-label { font-weight: 600; font-size: 15.5px; line-height: 1.4; }
+.ff-label b { color: var(--ff-wine); }
+.ff-label small { font-weight: 400; color: var(--ff-muted); }
+.ff select:focus-visible, .ff textarea:focus-visible, .ff button:focus-visible { outline: 2px solid var(--ff-gold); outline-offset: 2px; }
+.ff-left { text-align: left; }
+.ff-agent { margin: 10px 0 0 !important; padding: 8px 10px; border-radius: 8px; background: var(--ff-soft); color: var(--ff-ink) !important; font-size: 14px !important; }
+.ff-geo { display: grid; gap: 6px; }
+.ff-geo .ff-again { justify-self: start; }

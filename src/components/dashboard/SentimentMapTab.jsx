@@ -10,7 +10,7 @@ import "./sentiment-map.css";
 import { createStreetLayer } from "../../mapTiles.js";
 
 /**
- * Sentiment map: tick any mix of layers (register, ground, outreach, opinion, 2023 history),
+ * Insight map (formerly Sentiment): tick any mix of layers (register, ground, outreach, opinion, 2023 history),
  * colour the map by one of them or by a comparison, and drill Oyo -> LGA -> ward -> polling
  * unit. Every figure comes from /api/pre-election/map; this file only draws it.
  */
@@ -18,11 +18,20 @@ import { createStreetLayer } from "../../mapTiles.js";
 const GROUPS = ["Register", "Ground", "Outreach", "Opinion", "History"];
 const DEFAULT_LAYERS = ["members", "calls", "needs"];
 // Faint for low values, deep for high ones: the eye reads the darkest areas as "most".
-const SEQ = ["#fdf0d5", "#f6cf85", "#e89a42", "#c2582a", "#7d1d2c"];
-const RED = ["#fde2dc", "#f7a996", "#ec6b53", "#c83a2b", "#861b15"];
+// Colours say how an area is doing without a legend: red = weak, amber = middle, green = strong,
+// for every measure where more is better. The priority score runs the other way (red = needs
+// attention). Measures that are neither good nor bad (age mix, registered voters) use a neutral
+// blue, so a young LGA does not look like a problem.
+const STRENGTH = ["#c0392b", "#e67e22", "#f2c14e", "#7cb342", "#2e7d32"];
+const NEED = [...STRENGTH].reverse();
+const NEUTRAL = ["#dbeafe", "#93c5fd", "#60a5fa", "#2563eb", "#1e3a8a"];
+const STRENGTH_KEYS = new Set(["members", "tenx", "reached", "calls", "contacts", "membersPerPu", "callsPer1k", "pvc", "phone", "gov2023", "pres2023"]);
+const STRENGTH_WORDS = ["Weak", "Below average", "Middle", "Good", "Strong"];
+const NEED_WORDS = ["Low priority", "Some need", "Needs attention", "High need", "Top priority"];
 const DIV = ["#b8452f", "#e08a6b", "#e9e1e4", "#8fcf8f", "#2f9e44"];
 const NO_DATA = "#9b8f94";
-const DEEP = new Set([SEQ[3], SEQ[4], RED[3], RED[4], DIV[0], DIV[4]]);
+// Fills dark enough to need light text on the polling-unit grid.
+const DEEP = new Set([STRENGTH[0], STRENGTH[4], NEUTRAL[3], NEUTRAL[4], DIV[0], DIV[4]]);
 
 // Basemaps: the same sources as the operations map, plus labelled imagery.
 const esri = (service) => L.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/${service}/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 19, attribution: "Tiles &copy; Esri" });
@@ -85,33 +94,30 @@ function formatValue(key, value, meta) {
   return meta?.format === "share" ? pct(value) : num(value);
 }
 
-/** Colour rule for the chosen measure over the current rows: { color(value), legend }. */
+/** Colour rule for the chosen measure over the current rows: { color(value), rate(value) -> word or null }. */
 function scaleFor(key, meta, rows) {
   if (key === "needs") {
-    const present = [...new Set(rows.map((row) => row.values.needs).filter(Boolean))];
-    return { color: (value) => NEED_COLORS[value] || "#8f7d86", legend: present.map((id) => ({ color: NEED_COLORS[id] || "#8f7d86", label: needLabel(id) })) };
+    return { color: (value) => NEED_COLORS[value] || "#8f7d86", rate: null };
   }
   if (key === "occupation") {
-    const present = [...new Set(rows.map((row) => row.values.occupation).filter(Boolean))];
-    return { color: (value) => OCCUPATION_COLORS[value] || "#8f7d86", legend: present.map((id) => ({ color: OCCUPATION_COLORS[id] || "#8f7d86", label: OCCUPATION_LABELS[id] || id })) };
+    return { color: (value) => OCCUPATION_COLORS[value] || "#8f7d86", rate: null };
   }
   if (key === "changeGov" || key === "changePres") {
     const color = (value) => DIV[CHANGE_BINS.findIndex((edge) => value < edge) === -1 ? 4 : CHANGE_BINS.findIndex((edge) => value < edge)];
-    return { color, legend: DIV.map((c, i) => ({ color: c, label: ["−20 pts or worse", "−5 to −20", "about even", "+5 to +25", "+25 pts or more"][i] })) };
+    return { color, rate: null };
   }
-  if (meta?.format === "share" && key !== "reached") {
-    const color = (value) => SEQ[SHARE_BINS.findIndex((edge) => value < edge) === -1 ? 4 : SHARE_BINS.findIndex((edge) => value < edge)];
-    return { color, legend: SEQ.map((c, i) => ({ color: c, label: ["under 20%", "20–35%", "35–50%", "50–65%", "65%+"][i] })) };
-  }
-  const palette = key === "priority" ? RED : SEQ;
+  const palette = key === "priority" ? NEED : STRENGTH_KEYS.has(key) ? STRENGTH : NEUTRAL;
+  const words = key === "priority" ? NEED_WORDS : STRENGTH_KEYS.has(key) ? STRENGTH_WORDS : null;
+  const scaled = (step) => ({ color: (value) => palette[step(value)], rate: words ? (value) => words[step(value)] : null });
+  // 2023 vote shares keep fixed bands, so 50%+ always reads as won.
+  if (key === "gov2023" || key === "pres2023") return scaled((value) => { const i = SHARE_BINS.findIndex((edge) => value < edge); return i === -1 ? 4 : i; });
+  // Everything else is ranked against the areas on screen: the top fifth is "Strong" here.
   const values = rows.map((row) => row.values[key]).filter((value) => value != null && Number.isFinite(value)).sort((a, b) => a - b);
-  if (!values.length) return { color: () => NO_DATA, legend: [] };
-  // Every area has the same value (e.g. no members in any ward yet): one faint colour, one legend row.
-  if (values[0] === values[values.length - 1]) return { color: () => palette[0], legend: [{ color: palette[0], label: `all ${formatValue(key, values[0], meta)}` }] };
+  if (!values.length) return { color: () => NO_DATA, rate: null };
+  // Every area has the same value (e.g. no members in any ward yet): one middle colour, no ranking.
+  if (values[0] === values[values.length - 1]) return { color: () => (words && values[0] === 0 ? palette[0] : palette[2]), rate: null };
   const edges = [0.2, 0.4, 0.6, 0.8].map((q) => values[Math.min(values.length - 1, Math.floor(q * values.length))]);
-  const color = (value) => { const i = edges.findIndex((edge) => value < edge); return palette[i === -1 ? 4 : i]; };
-  const fmt = (value) => formatValue(key, value, meta);
-  return { color, legend: palette.map((c, i) => ({ color: c, label: i === 0 ? `under ${fmt(edges[0])}` : i === 4 ? `${fmt(edges[3])}+` : `${fmt(edges[i - 1])}–${fmt(edges[i])}` })) };
+  return scaled((value) => { const i = edges.findIndex((edge) => value < edge); return i === -1 ? 4 : i; });
 }
 
 async function fetchWardBoundaries(lgaName, token, signal) {
@@ -307,7 +313,8 @@ export default function SentimentMapTab({ authToken, initialLga = null }) {
         const item = features.find((entry) => entry.feature === feature);
         const row = item?.row;
         const name = row?.name || feature.properties?.ward || featureLgaName(feature) || "Area";
-        const lines = row ? [...new Set([measure, ...selected])].filter((key) => row.values[key] !== undefined).slice(0, 6).map((key) => `${escapeHtml(data.layers[key]?.label || data.comparisons[key]?.label || "Priority")}: <b>${escapeHtml(formatValue(key, row.values[key], data.layers[key]))}</b>`) : ["No data matched to this boundary"];
+        const rating = row && scale.rate && row.values[measure] != null ? scale.rate(row.values[measure]) : "";
+        const lines = row ? [...new Set([measure, ...selected])].filter((key) => row.values[key] !== undefined).slice(0, 6).map((key) => `${escapeHtml(data.layers[key]?.label || data.comparisons[key]?.label || "Priority")}: <b>${escapeHtml(formatValue(key, row.values[key], data.layers[key]))}</b>${key === measure && rating ? ` · <b>${escapeHtml(rating)}</b>` : ""}`) : ["No data matched to this boundary"];
         layer.bindTooltip(`<b>${escapeHtml(name)}</b><br>${lines.join("<br>")}${row ? `<br><i>Click for details${level !== "pu" ? ` · double-click to open ${level === "lga" ? "its wards" : "its polling units"}` : ""}</i>` : ""}`, { sticky: true, className: "smp-tip" });
         if (row) {
           layer.on("add", () => layer.getElement()?.setAttribute("data-area", row.key));
@@ -365,7 +372,7 @@ export default function SentimentMapTab({ authToken, initialLga = null }) {
   }, [data, features, scale, measure, selected, dotKey, level]);
 
   if (query.isError) return <section className="smp" ref={fitRef}><p className="smp-empty">{query.error.message}</p></section>;
-  if (!data) return <section className="smp" ref={fitRef}><p className="smp-empty">Loading the sentiment map…</p></section>;
+  if (!data) return <section className="smp" ref={fitRef}><p className="smp-empty">Loading the insight map…</p></section>;
 
   const toggle = (key) => setSelected((current) => (current.includes(key) ? current.filter((item) => item !== key) : [...current, key]));
   const totals = data.totals;
@@ -376,7 +383,7 @@ export default function SentimentMapTab({ authToken, initialLga = null }) {
   const boundaryMissing = level === "lga" ? lgaBoundaries.isError || !lgaBoundaries.data?.lgas : wardBoundaries.isFetched && !features.length;
 
   return (
-    <section ref={fitRef} style={fitHeight ? { height: fitHeight } : undefined} className={`smp${query.isFetching ? " smp-busy" : ""}`} aria-label="Sentiment map">
+    <section ref={fitRef} style={fitHeight ? { height: fitHeight } : undefined} className={`smp${query.isFetching ? " smp-busy" : ""}`} aria-label="Insight map">
       <div className="smp-bar">
         <nav className="smp-crumb" aria-label="Map level">
           <button type="button" onClick={() => goTo("lga")} className={level === "lga" ? "on" : ""}>Oyo State</button>
@@ -437,13 +444,6 @@ export default function SentimentMapTab({ authToken, initialLga = null }) {
             </select>
           </label>
           {boundaryMissing && <p className="smp-overlay-note">Boundaries for this level could not be loaded. The side panel and polling-unit grid still work.</p>}
-          {scale && level !== "pu" && (
-            <div className="smp-legend">
-              <b>{view === "priority" ? "Priority score (needs attention)" : colourOptions.find((option) => option.key === colourBy)?.label}</b>
-              {level !== "pu" && <div>{scale.legend.map((item) => <span key={item.label}><i style={{ background: item.color }} />{item.label}</span>)}<span><i className="smp-hatch" />no data</span></div>}
-              {dotKey && level !== "pu" && <span className="smp-dotnote"><i /> circles: {data.layers[dotKey].label.toLowerCase()} · hollow red = none</span>}
-            </div>
-          )}
           {level === "pu" && (
             <div className="smp-units">
               <b>Polling units in {data.ward?.name} ({rows.length}) · coloured by {colourOptions.find((option) => option.key === colourBy)?.label?.toLowerCase() || "members"}</b>

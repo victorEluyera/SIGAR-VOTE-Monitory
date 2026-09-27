@@ -6,6 +6,8 @@ import { lgaLabel, oyoLgas } from './lga.js';
 import { baselineRegister, withBaseline } from './baseline.js';
 import { buildMap } from './map.js';
 import { buildPulse } from './pulse.js';
+import { buildOverview } from './overview.js';
+import { buildVoterAnalysis, memberMatchKeys } from './voters.js';
 import { aiPrompt, buildFacts, checkAiPlan, HORIZONS, QUADRANTS, ruleActions, ruleBrief, STATUSES } from './actions.js';
 import { askModels } from './ai.js';
 
@@ -75,6 +77,46 @@ export function registerPreElectionRoutes({ app, auth, rateLimit, asyncRoute, st
     if (!cache.has(key)) {
       if (cache.size > 100) cache.clear();
       cache.set(key, buildMap({ datasets, survey, lga, ward, register: baselineRegister(), tenx: tenx.data }));
+    }
+    res.set('Cache-Control', 'private, max-age=30');
+    res.json(cache.get(key));
+  }));
+
+  // ---- Overview and voter analysis --------------------------------------------------------------
+  // Both are built from the same pulse and map figures, so every tab agrees.
+  const loadViews = async () => {
+    const [uploaded, survey] = await Promise.all([store.preElectionDatasets(), store.voterSurvey()]);
+    const datasets = withBaseline(uploaded);
+    const tenx = await tenxSnapshot();
+    return { datasets, survey, tenx, version: `${datasets.map((item) => item.id).sort().join(',')}|${survey?.id || ''}|${tenx.version}` };
+  };
+
+  app.get('/api/pre-election/overview', auth, rateLimit, asyncRoute(async (req, res) => {
+    if (!canView(req, res)) return;
+    const { datasets, survey, tenx, version } = await loadViews();
+    const key = `overview|${version}`;
+    if (!cache.has(key)) {
+      if (cache.size > 100) cache.clear();
+      const pulse = buildPulse({ datasets, survey, tenx: tenx.data });
+      const map = buildMap({ datasets, survey, register: baselineRegister(), tenx: tenx.data });
+      cache.set(key, buildOverview({ pulse, map }));
+    }
+    res.set('Cache-Control', 'private, max-age=30');
+    res.json(cache.get(key));
+  }));
+
+  app.get('/api/pre-election/voters', auth, rateLimit, asyncRoute(async (req, res) => {
+    if (!canView(req, res)) return;
+    const { datasets, survey, tenx, version } = await loadViews();
+    const lga = String(req.query.lga || '').slice(0, 80);
+    const ward = /^\d{1,2}$/.test(String(req.query.ward || '')) ? String(Number(req.query.ward)) : '';
+    const key = `voters|${version}|${lga}|${ward}`;
+    if (!cache.has(key)) {
+      if (cache.size > 100) cache.clear();
+      const map = buildMap({ datasets, survey, lga, ward, register: baselineRegister(), tenx: tenx.data });
+      const memberKeys = memberMatchKeys(datasets.filter((item) => item.kind === 'members'));
+      // tenx.data.people is the per-person feed oyo10x does not send yet (see voters.js).
+      cache.set(key, buildVoterAnalysis({ map, memberKeys, tenxPeople: tenx.data?.people || null }));
     }
     res.set('Cache-Control', 'private, max-age=30');
     res.json(cache.get(key));

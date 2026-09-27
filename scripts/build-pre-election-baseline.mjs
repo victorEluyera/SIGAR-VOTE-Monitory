@@ -49,10 +49,15 @@ for (const spec of option('members')) {
   const [label, target] = spec.includes('=') ? spec.split(/=(.*)/s) : ['Members', spec];
   const [file, header] = target.split('|');
   const dataset = buildDataset('members', withHeader(open(file), header), { label, source: sources.get(label) || '' });
-  dataset.records = dataset.records.map(([lga, ward, unit, id]) => {
+  // Match keys (phone / name + polling unit / name + birth date, all keyed hashes) let 10x volunteers
+  // be checked against this list. They only match if built with the server's own secret, so they
+  // are kept only when PRE_ELECTION_HASH_KEY is set here to the same value as on the server.
+  const keepKeys = Boolean(process.env.PRE_ELECTION_HASH_KEY);
+  dataset.records = dataset.records.map(([lga, ward, unit, id, keys]) => {
     if (!tokens.has(id)) tokens.set(id, randomBytes(9).toString('base64url'));
-    return [lga, ward, unit, tokens.get(id)];
+    return keepKeys && keys?.length ? [lga, ward, unit, tokens.get(id), keys] : [lga, ward, unit, tokens.get(id)];
   });
+  if (!keepKeys) console.log(`  (${label}: no match keys kept -- set PRE_ELECTION_HASH_KEY to the server's value to allow 10x checks)`);
   datasets.push(meta(dataset, file));
 }
 for (const file of option('contacts')) datasets.push(meta(buildDataset('contacts', open(file), { label: 'Contacts in our possession' }), file));

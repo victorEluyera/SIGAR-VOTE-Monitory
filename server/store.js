@@ -17,6 +17,7 @@ import { createReconciliationRepository } from './modules/results/reconciliation
 import { createTasksRepository } from './modules/tasks/repository.js';
 import { createCameraRecordingsRepository } from './modules/field-operations/camera-recordings.js';
 import { createVoterSurveyRepository } from './modules/voter-survey/repository.js';
+import { createFeedbackRepository } from './modules/feedback/repository.js';
 import { createPreElectionRepository } from './modules/pre-election/repository.js';
 
 // Compatibility facade: modules own persistence; existing consumers keep their API.
@@ -41,6 +42,7 @@ export function createStore(context) {
     ...createTasksRepository(context),
     ...createCameraRecordingsRepository(context),
     ...createVoterSurveyRepository(context),
+    ...createFeedbackRepository(context),
     ...createPreElectionRepository(context),
   };
   if (context.transactionDisabled) return repositories;

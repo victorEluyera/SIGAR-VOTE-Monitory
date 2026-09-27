@@ -24,6 +24,7 @@ import { registerReportingRoutes } from './modules/reporting/routes.js';
 import { registerStakeholderRoutes } from './modules/stakeholder/routes.js';
 import { registerOyo10xRoutes } from './integrations/oyo10x.js';
 import { registerVoterSurveyRoutes } from './modules/voter-survey/routes.js';
+import { registerFeedbackRoutes } from './modules/feedback/routes.js';
 import { registerPreElectionRoutes } from './modules/pre-election/routes.js';
 import { registerReferenceDataRoutes } from './modules/reference-data/routes.js';
 import { registerEvidenceRoutes } from './modules/foundation/evidence-routes.js';
@@ -267,6 +268,7 @@ registerStakeholderRoutes({ app, auth, rateLimit, asyncRoute, store });
 const oyo10x = registerOyo10xRoutes({ app, auth, rateLimit, asyncRoute });
 registerVoterSurveyRoutes({ app, auth, rateLimit, asyncRoute, store, openAiPrimaryModel, openAiFallbackModel, callGroqWithFallback, geminiApiKeys });
 registerPreElectionRoutes({ app, auth, rateLimit, asyncRoute, store, geminiApiKeys, callGroqWithFallback, openAiPrimaryModel, oyo10x });
+registerFeedbackRoutes({ app, auth, rateLimit, asyncRoute, store, oyo10x, secret, authenticateToken });
 registerReferenceDataRoutes({ app, auth, adminOnly, rateLimit, asyncRoute, store });
 registerEvidenceRoutes({ app, auth, adminOnly, rateLimit, asyncRoute, store, canAccessIncident });
 

@@ -5,6 +5,9 @@ import { API } from "./config.js";
 import { queryClient } from "./queryClient.js";
 
 const Dashboard = lazy(() => import("./components/dashboard/Dashboard.jsx"));
+const PublicFeedbackForm = lazy(() => import("./components/feedback/PublicFeedbackForm.jsx"));
+// A shared feedback link (/feedback/<token>) opens the public form: no sign-in, no dashboard.
+const feedbackToken = window.location.pathname.match(/^\/feedback\/([A-Za-z0-9_-]{6,40})\/?$/)?.[1] || null;
 
 export default function App() {
   const [session, setSession] = useState(() => {
@@ -47,6 +50,13 @@ export default function App() {
     }
     setSession(next);
   };
+  if (feedbackToken) {
+    return (
+      <Suspense fallback={<div className="grid min-h-screen place-content-center text-sm">Loading…</div>}>
+        <PublicFeedbackForm token={feedbackToken} />
+      </Suspense>
+    );
+  }
   return session ? (
     <Suspense
       fallback={

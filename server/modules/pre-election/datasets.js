@@ -97,6 +97,60 @@ const personId = (phone, name, lga, household = '') => {
   const basis = phone ? `p:${phone}${household ? `|${household}` : ''}` : `n:${clean(name).toLowerCase()}|${lga}`;
   return createHmac('sha256', hashKey()).update(basis).digest('base64url').slice(0, 16);
 };
+/** The key a member list stores for a phone number, so another list (e.g. 10x) can be checked against it. */
+export const memberKey = (phone) => personId(phone, '', '');
+
+// ---- Is this the same person? ------------------------------------------------------------------
+// Another list (10x volunteers) is checked against the member lists with three keys, any one of
+// which is a match: the phone number; the name at the same INEC polling unit; the name with the
+// same date of birth. A name alone is never enough -- "Saheed Azeez" appears 21 times in the APC
+// list. Every key is a keyed hash: names, phones and birth dates are not stored.
+const TITLES = new Set(['alh', 'alhaji', 'alhaja', 'mr', 'mrs', 'miss', 'ms', 'chief', 'dr', 'hon', 'pastor', 'prince', 'princess', 'engr', 'deacon', 'deaconess', 'rev', 'evang', 'mallam', 'otunba', 'comrade', 'barr', 'prof', 'elder', 'mama', 'baba', 'iya', 'alfa']);
+/** "ALH. SAHEED  AZEEZ" and "Azeez Saheed" -> "azeez saheed". '' when fewer than two name words remain. */
+export function personNameKey(value) {
+  const words = String(value ?? '').toLowerCase().replace(/[^a-z\s]+/g, ' ').split(/\s+/).filter((word) => word.length >= 2 && !TITLES.has(word));
+  return words.length >= 2 ? [...new Set(words)].sort().join(' ') : '';
+}
+/** YYYY-MM-DD from "1988-6-10", "10/06/1988" or an Excel date number; '' otherwise. */
+export function birthDateKey(value) {
+  const text = String(value ?? '').trim();
+  let y; let m; let d;
+  let hit = text.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if (hit) [, y, m, d] = hit;
+  else if ((hit = text.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/))) [, d, m, y] = hit;
+  else if (/^\d{5}(\.\d+)?$/.test(text)) {
+    const date = new Date(Date.UTC(1899, 11, 30) + Math.floor(Number(text)) * 86_400_000);
+    [y, m, d] = [date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate()];
+  } else return '';
+  const [year, month, day] = [Number(y), Number(m), Number(d)];
+  if (year < 1900 || year > 2015 || month < 1 || month > 12 || day < 1 || day > 31) return '';
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+const matchHash = (basis) => createHmac('sha256', hashKey()).update(basis).digest('base64url').slice(0, 12);
+
+/** INEC "LGA|ward number|unit number" for a place, or '' when it cannot be placed exactly. */
+export function createPlaceKeyer() {
+  const resolvers = new Map();
+  return (lga, ward, unit) => {
+    if (!lga || !ward || !unit) return '';
+    if (!resolvers.has(lga)) resolvers.set(lga, wardResolver(lga));
+    const place = resolvers.get(lga)(ward);
+    if (!place) return '';
+    const number = /^\d+$/.test(String(unit)) ? Number(unit) : place.units.find((item) => nameKey(item.name) === nameKey(unit))?.number;
+    return number !== undefined && place.units.some((item) => item.number === number) ? `${lga}|${place.number}|${number}` : '';
+  };
+}
+
+/** The match keys for one person: any shared key with another list means the same person. */
+export function identityKeys({ phone = '', name = '', dob = '', place = '' }) {
+  const keys = [];
+  if (phone) keys.push(matchHash(`p:${phone}`));
+  const person = personNameKey(name);
+  if (person && place) keys.push(matchHash(`np:${person}|${place}`));
+  const born = birthDateKey(dob);
+  if (person && born) keys.push(matchHash(`nd:${person}|${born}`));
+  return keys;
+}
 const nameKey = (value) => String(value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
 /**
@@ -137,6 +191,7 @@ function buildMembers(workbook) {
   const pending = [];
   const unmatched = new Map();
   const resolveUnitName = createUnitNameResolver();
+  const placeKey = createPlaceKeyer();
   let rowsRead = 0;
   let noPhone = 0;
   let unitsByName = 0;
@@ -168,8 +223,9 @@ function buildMembers(workbook) {
         const hit = resolveUnitName(lga, ward, row[columns.unit]);
         if (hit) { unitsByNameMatched += 1; ({ ward, unit } = hit); }
       }
-      const person = columns.dob !== undefined ? `${nameKey(name)}|${clean(row[columns.dob])}` : '';
-      pending.push({ lga, ward, unit, phone, name, person });
+      const dob = columns.dob !== undefined ? clean(row[columns.dob]) : '';
+      const person = columns.dob !== undefined ? `${nameKey(name)}|${dob}` : '';
+      pending.push({ lga, ward, unit, phone, name, person, keys: identityKeys({ phone, name, dob, place: placeKey(lga, ward, unit) }) });
     }
   }
   if (!rowsRead) throw new Error('No member rows were found. The sheet needs a header row with a phone number or name column, and an LGA column (or one sheet per LGA).');
@@ -182,8 +238,9 @@ function buildMembers(workbook) {
     peoplePerPhone.get(entry.phone).add(entry.person);
   }
   const sharedPhones = [...peoplePerPhone.values()].filter((people) => people.size > 1).length;
-  const records = pending.map(({ lga, ward, unit, phone, name, person }) =>
-    [lga, ward, unit, personId(phone, name, lga, peoplePerPhone.get(phone)?.size > 1 ? person : '')]);
+  // [lga, ward, unit, person id, match keys]: the keys let another list (10x) be checked against this one.
+  const records = pending.map(({ lga, ward, unit, phone, name, person, keys }) =>
+    [lga, ward, unit, personId(phone, name, lga, peoplePerPhone.get(phone)?.size > 1 ? person : ''), keys]);
 
   const unique = new Set(records.map((record) => record[3])).size;
   return {
