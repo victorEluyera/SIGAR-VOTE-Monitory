@@ -57,11 +57,11 @@
 .smp-basemap { position: absolute; z-index: 600; right: 10px; top: 10px; display: flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid var(--smp-rule); border-radius: 9px; background: #16040ae6; font-size: 11px; color: var(--smp-muted); }
 .smp-basemap select { padding: 3px 6px; border: 1px solid #8a6d2e; border-radius: 6px; background: var(--smp-sunk); color: var(--smp-ink); font: inherit; font-size: 11.5px; }
 .smp-tip { font-size: 12px; line-height: 1.45; }
-.smp-legend { position: absolute; z-index: 500; left: 10px; bottom: 24px; max-width: 270px; display: grid; gap: 5px; padding: 8px 10px; border: 1px solid var(--smp-rule); border-radius: 10px; background: #16040ae6; font-size: 11px; color: var(--smp-muted); }
-.smp-legend b { color: #fff; font-size: 11.5px; }
-.smp-legend div { display: grid; gap: 3px; }
-.smp-legend span { display: flex; align-items: center; gap: 6px; }
-.smp-legend i { width: 14px; height: 10px; border-radius: 2px; flex: 0 0 auto; }
+.smp-legend { position: absolute; z-index: 500; left: 8px; bottom: 20px; max-width: 210px; display: grid; gap: 3px; padding: 5px 7px; border: 1px solid var(--smp-rule); border-radius: 7px; background: #16040ae6; font-size: 9px; color: var(--smp-muted); }
+.smp-legend b { color: #fff; font-size: 9.5px; }
+.smp-legend div { display: grid; gap: 2px; }
+.smp-legend span { display: flex; align-items: center; gap: 4px; }
+.smp-legend i { width: 10px; height: 8px; border-radius: 2px; flex: 0 0 auto; }
 .smp-hatch { background: repeating-linear-gradient(45deg, #9b8f94 0 3px, #d9d2d5 3px 5px); }
 .smp-dotnote i { width: 10px !important; height: 10px !important; border-radius: 50% !important; background: #5ec8ff; }
 .smp-overlay-note { position: absolute; z-index: 500; right: 10px; top: 52px; max-width: 260px; margin: 0; padding: 8px 10px; border-radius: 8px; background: #35121ce6; border: 1px dashed #8a6d2e; font-size: 11px; color: var(--smp-gold-bright); }
@@ -173,7 +173,7 @@
 /* Side panel at 40% of the width. */
 .smp-main { grid-template-columns: minmax(0, 1fr) minmax(320px, 40%); }
 /* Legend: top left, beside the zoom buttons, so it never sits on the polling-unit or ward tiles. */
-.smp-legend { max-width: 240px; max-height: calc(100% - 40px); overflow-y: auto; }
+.smp-legend { max-width: 210px; max-height: calc(100% - 40px); overflow-y: auto; }
 .smp-legend-top { top: 10px; bottom: auto; left: 52px; }
 .smp-legend span { font-variant-numeric: tabular-nums; }
 .smp-unplaced > div { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }

@@ -38,6 +38,21 @@ test('normalizePhone restores the leading zero and rejects malformed numbers', (
   assert.equal(normalizePhone(''), '');
 });
 
+test('pulse exposes only aggregate 10X project counts and marks partial project data', () => {
+  const pulse = buildPulse({ tenx: {
+    sourceGeneratedAt: '2026-09-29T09:00:00.000Z',
+    totals: { registered: 120, verified: 80, unitPromoters: 15, grassroots: 90 },
+    projects: { total: 3, stages: { submitted: 1, ongoing: 1, completed: 1, notStarted: 0 }, wards: 2, partial: true },
+  } });
+  assert.equal(pulse.tenx.unitPromoters, 15);
+  assert.deepEqual(pulse.tenx.projects, {
+    total: 3,
+    stages: { submitted: 1, ongoing: 1, completed: 1, notStarted: 0 },
+    wards: 2,
+    partial: true,
+  });
+});
+
 test('member lists keep no names or phones and count a person in two lists once', () => {
   const agents = buildDataset('members', openWorkbook(buildXlsx({
     Master: [

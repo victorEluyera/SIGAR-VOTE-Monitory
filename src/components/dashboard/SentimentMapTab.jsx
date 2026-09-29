@@ -25,7 +25,7 @@ const DEFAULT_LAYERS = ["members", "calls", "needs"];
 const STRENGTH = ["#c0392b", "#e67e22", "#f2c14e", "#7cb342", "#2e7d32"];
 const NEED = [...STRENGTH].reverse();
 const NEUTRAL = ["#dbeafe", "#93c5fd", "#60a5fa", "#2563eb", "#1e3a8a"];
-const STRENGTH_KEYS = new Set(["members", "cleaned", "cleanedPerPu", "tenx", "promoters", "promotersPerPu", "projects", "projectsPerPu", "reached", "calls", "contacts", "activePhones", "membersPerPu", "callsPer1k", "pvc", "phone", "gov2023", "pres2023", "turnout2023"]);
+const STRENGTH_KEYS = new Set(["members", "cleaned", "cleanedPerPu", "tenx", "promoters", "promotersPerPu", "projects", "projectsPerPu", "reached", "calls", "contacts", "membersPerPu", "callsPer1k", "pvc", "phone", "gov2023", "pres2023", "turnout2023"]);
 // Measures where more is worse (red = most).
 const PROBLEM_KEYS = new Set(["duplicates"]);
 const PROBLEM_WORDS = ["Clean", "Few", "Some", "Many", "Most"];
@@ -256,7 +256,7 @@ function AlertsCard({ alerts }) {
 
 /** One layer group as a Power BI-style slicer: a dropdown of tick boxes. */
 function LayerSlicer({ group, layers, selected, level, badges, open, onOpen, onToggle, onClear }) {
-  const items = Object.entries(layers).filter(([, layer]) => layer.group === group);
+  const items = Object.entries(layers).filter(([key, layer]) => key !== "activePhones" && layer.group === group);
   if (!items.length) return null;
   const on = items.filter(([key]) => selected.includes(key));
   return (
@@ -334,7 +334,7 @@ export default function SentimentMapTab({ authToken, initialLga = null }) {
   // Colour-by options: ticked layers usable at this level, plus comparisons whose inputs are ticked.
   const colourOptions = useMemo(() => {
     if (!data) return [];
-    const layerOptions = selected.filter((key) => data.layers[key]?.levels.includes(level)).map((key) => ({ key, label: data.layers[key].label }));
+    const layerOptions = selected.filter((key) => key !== "activePhones" && data.layers[key]?.levels.includes(level)).map((key) => ({ key, label: data.layers[key].label }));
     const comparisons = Object.entries(data.comparisons).filter(([, item]) => item.needs.every((need) => selected.includes(need) || need === "registered")).map(([key, item]) => ({ key, label: item.label }));
     return [...comparisons, ...layerOptions];
   }, [data, selected, level]);
@@ -491,7 +491,8 @@ export default function SentimentMapTab({ authToken, initialLga = null }) {
 
   const toggle = (key) => setSelected((current) => (current.includes(key) ? current.filter((item) => item !== key) : [...current, key]));
   const totals = data.totals;
-  const pillValue = { population: "est.", registered: compact(totals.registered), members: compact(totals.members), cleaned: totals.cleaned != null ? compact(totals.cleaned) : null, duplicates: totals.duplicates != null ? compact(totals.duplicates) : null, promoters: totals.promoters != null ? compact(totals.promoters) : null, tenx: totals.tenx != null ? compact(totals.tenx) : null, contacts: compact(totals.contacts), calls: compact(totals.calls) };
+  const contactsTotal = totals.contacts == null ? null : totals.contacts >= 3_000_000 ? "3+M" : compact(totals.contacts);
+  const pillValue = { population: "est.", registered: compact(totals.registered), members: compact(totals.members), cleaned: totals.cleaned != null ? compact(totals.cleaned) : null, duplicates: totals.duplicates != null ? compact(totals.duplicates) : null, promoters: totals.promoters != null ? compact(totals.promoters) : null, tenx: totals.tenx != null ? compact(totals.tenx) : null, contacts: contactsTotal, calls: compact(totals.calls) };
   const pickLga = (key) => {
     setPicked(null);
     setWard(null);
@@ -608,12 +609,11 @@ export default function SentimentMapTab({ authToken, initialLga = null }) {
         </div>
 
         <aside className="smp-side">
-          <AlertsCard key={`${level}|${lga?.key || ""}|${ward?.number || ""}`} alerts={data.alerts} />
           {card ? <AreaCard area={card} data={data} selected={selected} measure={measure} onOpen={level !== "pu" && card !== data.context ? () => drill(card) : null} />
             : <section className="smp-card"><header><div><h3>{level === "lga" ? "All 33 LGAs" : data.ward?.name}</h3><p>Click an area to see its figures</p></div></header>
               <dl>
                 <div><dt>Registered voters</dt><dd>{num(level === "lga" ? totals.registered : data.ward?.registered)}</dd></div>
-                {level === "lga" && <><div><dt>APC confirmed members</dt><dd>{num(totals.members)}</dd></div><div><dt>10x volunteers</dt><dd>{totals.tenx != null ? num(totals.tenx) : "oyo10x not connected"}</dd></div><div><dt>Contacts in our possession</dt><dd>{num(totals.contacts)}</dd></div><div><dt>Call center calls</dt><dd>{num(totals.calls)}</dd></div></>}
+                {level === "lga" && <><div><dt>APC confirmed members</dt><dd>{num(totals.members)}</dd></div><div><dt>10x volunteers</dt><dd>{totals.tenx != null ? num(totals.tenx) : "oyo10x not connected"}</dd></div><div><dt>Contacts in our possession</dt><dd>{contactsTotal ?? "—"}</dd></div><div><dt>Call center calls</dt><dd>{num(totals.calls)}</dd></div></>}
               </dl>
               {level === "pu" && data.ward?.register && selected.some((key) => REGISTER_KEYS.includes(key)) && <RegisterBlock register={data.ward.register} />}
               </section>}
@@ -635,6 +635,7 @@ export default function SentimentMapTab({ authToken, initialLga = null }) {
               </ol>
             ) : <p className="smp-sub">Nothing stands out at this level.</p>}
           </section>
+          <AlertsCard key={`${level}|${lga?.key || ""}|${ward?.number || ""}`} alerts={data.alerts} />
           <section className="smp-card smp-intel">
             <h3>Map intelligence</h3>
             <p className="smp-sub">{level === "lga" ? "History + survey + ground work" : level === "ward" ? `${data.lga?.name} · wards` : `${data.ward?.name} · polling units`}</p>

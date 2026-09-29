@@ -331,11 +331,18 @@ function insightsFor({ lga, survey, members, contacts, reference, rows, center }
 function tenxView(tenx, lga) {
   if (!tenx) return { available: false };
   const updatedAt = tenx.sourceGeneratedAt || null;
-  if (!lga) return { available: true, total: tenx.totals.registered, verified: tenx.totals.verified, unitPromoters: tenx.totals.unitPromoters, grassroots: tenx.totals.grassroots, updatedAt };
+  const projects = tenx.projects || {};
+  const projectView = {
+    total: projects.total ?? 0,
+    stages: projects.stages || null,
+    wards: projects.wards ?? null,
+    partial: Boolean(projects.partial),
+  };
+  if (!lga) return { available: true, total: tenx.totals.registered, verified: tenx.totals.verified, unitPromoters: tenx.totals.unitPromoters, grassroots: tenx.totals.grassroots, projects: projectView, updatedAt };
   const row = (tenx.byLga || []).find((item) => matchLga(item.name) === lga);
   return row
-    ? { available: true, total: row.members, verified: row.verified, unitPromoters: row.unitPromoters, grassroots: row.grassroots, updatedAt }
-    : { available: true, total: null, byLgaMissing: true, updatedAt };
+    ? { available: true, total: row.members, verified: row.verified, unitPromoters: row.unitPromoters, grassroots: row.grassroots, projects: projectView, updatedAt }
+    : { available: true, total: null, byLgaMissing: true, projects: projectView, updatedAt };
 }
 
 export function buildPulse({ datasets = [], survey = null, lga = '', tenx = null }) {

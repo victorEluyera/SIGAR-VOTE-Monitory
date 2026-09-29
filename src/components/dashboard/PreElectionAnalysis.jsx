@@ -8,14 +8,14 @@ import ResourcesTab from "./ResourcesTab.jsx";
  * Pre-election: four tabs.
  *   Overview  -- the summary for the candidate and stakeholders.
  *   Insight   -- the map.
- *   Feedback  -- what people tell us: call center, 10x field work, online, the feedback form.
+ *   Sentiment -- what people tell us: call center, 10x field work, online, the feedback form.
  *   Resources -- plans, resources and reports (administrators).
  * Uploads live in the sidebar under Tools -> Manage Data.
  */
 const TABS = [
   { id: "overview", label: "Overview" },
   { id: "insight", label: "Insight" },
-  { id: "feedback", label: "Feedback" },
+  { id: "feedback", label: "Sentiment" },
   { id: "resources", label: "Resources", admin: true },
 ];
 
