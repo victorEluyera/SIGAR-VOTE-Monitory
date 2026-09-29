@@ -6,7 +6,7 @@ import { lgaLabel, oyoLgas } from './lga.js';
 import { baselineRegister, withBaseline } from './baseline.js';
 import { buildMap } from './map.js';
 import { buildPulse } from './pulse.js';
-import { buildOverview } from './overview.js';
+import { buildOverview, onlineReport } from './overview.js';
 import { buildVoterAnalysis, memberMatchKeys } from './voters.js';
 import { aiPrompt, buildFacts, checkAiPlan, HORIZONS, QUADRANTS, ruleActions, ruleBrief, STATUSES } from './actions.js';
 import { askModels } from './ai.js';
@@ -99,7 +99,7 @@ export function registerPreElectionRoutes({ app, auth, rateLimit, asyncRoute, st
       if (cache.size > 100) cache.clear();
       const pulse = buildPulse({ datasets, survey, tenx: tenx.data });
       const map = buildMap({ datasets, survey, register: baselineRegister(), tenx: tenx.data });
-      cache.set(key, buildOverview({ pulse, map }));
+      cache.set(key, buildOverview({ pulse, map, tenx: tenx.data, online: onlineReport() }));
     }
     res.set('Cache-Control', 'private, max-age=30');
     res.json(cache.get(key));

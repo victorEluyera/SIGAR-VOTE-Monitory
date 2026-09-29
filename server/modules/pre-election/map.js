@@ -2,6 +2,7 @@ import { analyzeSurvey, createSurveyReader, lgaKey as surveyLgaKey } from '../vo
 import { themeLabel } from './contact-center.js';
 import { STATE_BASELINE } from './pulse.js';
 import { lgaResults2023, oyoGeo, presFromUnits, wardResolver } from './geo.js';
+import { titleCase } from './voters.js';
 import { lgaLabel, matchLga, oyoLgas } from './lga.js';
 
 /**
@@ -33,19 +34,37 @@ export const LAYERS = {
   phone: { label: 'Phone on file', group: 'Register', levels: ALL_LEVELS, format: 'share' },
   disability: { label: 'With a disability', group: 'Register', levels: ALL_LEVELS, format: 'count' },
   members: { label: 'APC confirmed members', group: 'Ground', levels: ALL_LEVELS, format: 'count' },
-  tenx: { label: '10x volunteers', group: 'Ground', levels: ALL_LEVELS, format: 'count', source: 'oyo10x' },
+  // Members whose record lands on a real INEC ward and polling unit (the rest carry labels that
+  // match nothing in INEC's list, so they cannot be worked on the ground as they are).
+  cleaned: { label: 'Cleaned party data', group: 'Ground', levels: ALL_LEVELS, format: 'count' },
+  // The same person listed again (same phone, or same name in the same household and LGA).
+  duplicates: { label: 'Duplicate member records', group: 'Ground', levels: ALL_LEVELS, format: 'count', note: 'Records of a person already on the list' },
+  tenx: { label: '10x volunteers', group: '10x', levels: ALL_LEVELS, format: 'count', source: 'oyo10x' },
+  promoters: { label: '10x PU promoters', group: '10x', levels: ALL_LEVELS, format: 'count', source: 'oyo10x' },
   reached: { label: 'Polling units reached', group: 'Ground', levels: ['lga', 'ward'], format: 'share' },
   contacts: { label: 'Contacts', group: 'Ground', levels: ['lga'], format: 'count' },
   calls: { label: 'Call center reached', group: 'Outreach', levels: ['lga', 'ward'], format: 'count' },
   needs: { label: 'Needs', group: 'Outreach', levels: ['lga'], format: 'category' },
+  activePhones: { label: 'Active phone numbers (NCC)', group: 'Outreach', levels: ALL_LEVELS, format: 'count', source: 'ncc' },
+  projects: { label: 'Community projects', group: '10x', levels: ALL_LEVELS, format: 'count', source: 'oyo10x' },
+  projectCost: { label: 'Project cost (estimate)', group: '10x', levels: ALL_LEVELS, format: 'naira', source: 'oyo10x' },
   undecided: { label: 'Undecided', group: 'Opinion', levels: ['lga'], format: 'share' },
   gov2023: { label: '2023 Governorship', group: 'History', levels: ['lga'], format: 'share' },
   pres2023: { label: '2023 Presidential', group: 'History', levels: ALL_LEVELS, format: 'share' },
+  turnout2023: { label: '2023 turnout', group: 'History', levels: ALL_LEVELS, format: 'share', note: 'Accredited voters ÷ registered voters, from the 2023 presidential result sheets' },
+};
+// Why a layer with no data is empty, when an upload in Manage Data is not the fix.
+const SOURCE_HINTS = {
+  ncc: 'Needs the NCC active-number check on our phone lists; not supplied yet',
 };
 // "Colour by" options that compare two layers.
 export const COMPARISONS = {
   membersPerPu: { label: 'APC confirmed members per polling unit', needs: ['members'], levels: ['lga', 'ward'] },
   callsPer1k: { label: 'Calls per 1,000 registered voters', needs: ['calls', 'registered'], levels: ['lga', 'ward'] },
+  cleanedPerPu: { label: 'Cleaned party data per polling unit', needs: ['cleaned'], levels: ['lga', 'ward'] },
+  promotersPerPu: { label: '10x promoters per polling unit', needs: ['promoters'], levels: ['lga', 'ward'] },
+  projectsPerPu: { label: 'Community projects per polling unit', needs: ['projects'], levels: ['lga', 'ward'] },
+  projectCostPerPu: { label: 'Project cost per polling unit', needs: ['projectCost'], levels: ['lga', 'ward'] },
 };
 
 export const OCCUPATIONS = { trading: 'Trading', student: 'Students', artisan: 'Artisans', business: 'Business', farming: 'Farming & fishing', public: 'Civil & public service', homemaker: 'Homemakers', other: 'Other' };
@@ -86,24 +105,118 @@ function tenxCounts(tenx) {
   const byLga = new Map();
   const byWard = new Map();
   const byUnit = new Map();
+  const promoters = { byLga: new Map(), byWard: new Map(), byUnit: new Map() };
+  const bump = (map, key, value) => map.set(key, (map.get(key) || 0) + (value || 0));
   for (const row of tenx.byLga || []) {
     const lga = matchLga(row.name);
-    if (lga) byLga.set(lga, (byLga.get(lga) || 0) + row.members);
+    if (lga) { byLga.set(lga, (byLga.get(lga) || 0) + row.members); bump(promoters.byLga, lga, row.unitPromoters); }
   }
   for (const row of tenx.byWard || []) {
     const lga = matchLga(row.lga);
     if (!lga) continue;
     const ward = wardResolver(lga)(row.name);
-    if (ward) byWard.set(`${lga}|${ward.number}`, (byWard.get(`${lga}|${ward.number}`) || 0) + row.members);
+    if (ward) { byWard.set(`${lga}|${ward.number}`, (byWard.get(`${lga}|${ward.number}`) || 0) + row.members); bump(promoters.byWard, `${lga}|${ward.number}`, row.unitPromoters); }
   }
   for (const row of tenx.byPollingUnit || []) {
     const lga = matchLga(row.lga);
     if (!lga) continue;
     const ward = wardResolver(lga)(row.ward);
     const number = ward?.units.find((unit) => String(unit.number) === String(Number(row.code ?? row.name)) || unit.name.toLowerCase() === String(row.name).toLowerCase())?.number;
-    if (ward && number !== undefined) byUnit.set(`${lga}|${ward.number}|${number}`, (byUnit.get(`${lga}|${ward.number}|${number}`) || 0) + row.members);
+    if (ward && number !== undefined) { byUnit.set(`${lga}|${ward.number}|${number}`, (byUnit.get(`${lga}|${ward.number}|${number}`) || 0) + row.members); bump(promoters.byUnit, `${lga}|${ward.number}|${number}`, row.unitPromoters); }
   }
-  return { byLga, byWard, byUnit, total: tenx.totals?.registered ?? null };
+  // Community projects per LGA and ward (10x places them by name; there is no polling unit).
+  const projects = { byLga: new Map(), byWard: new Map(), byUnit: new Map(), cost: { byLga: new Map(), byWard: new Map(), byUnit: new Map() }, costed: 0 };
+  const add = (map, key, value) => map.set(key, (map.get(key) || 0) + value);
+  for (const row of tenx.projects?.byWard || []) {
+    const lga = matchLga(row.lga);
+    if (!lga) continue;
+    add(projects.byLga, lga, row.projects);
+    if (row.cost) { add(projects.cost.byLga, lga, row.cost); projects.costed += 1; }
+    const ward = row.ward ? wardResolver(lga)(row.ward) : null;
+    if (!ward) continue;
+    add(projects.byWard, `${lga}|${ward.number}`, row.projects);
+    if (row.cost) add(projects.cost.byWard, `${lga}|${ward.number}`, row.cost);
+  }
+  // Projects tied to one polling unit, when 10x sends the unit (INEC code or number).
+  for (const row of tenx.projects?.byPollingUnit || []) {
+    const lga = matchLga(row.lga);
+    const ward = lga ? wardResolver(lga)(row.ward) : null;
+    const code = String(row.code || '').split(/[-/]/).pop();
+    const number = ward?.units.find((unit) => String(unit.number) === String(Number(code || row.name)) || unit.name.toLowerCase() === String(row.name || '').toLowerCase())?.number;
+    if (number === undefined) continue;
+    add(projects.byUnit, `${lga}|${ward.number}|${number}`, row.projects);
+    if (row.cost) add(projects.cost.byUnit, `${lga}|${ward.number}|${number}`, row.cost);
+  }
+  return { byLga, byWard, byUnit, promoters, projects, total: tenx.totals?.registered ?? null };
+}
+
+/** 2023 turnout over the units that have a transcribed result sheet: accredited ÷ registered. */
+function turnoutOf(units) {
+  const counted = units.filter((unit) => unit.accredited > 0 && unit.registered > 0);
+  if (!counted.length) return null;
+  return share(counted.reduce((sum, unit) => sum + unit.accredited, 0), counted.reduce((sum, unit) => sum + unit.registered, 0));
+}
+
+// Where each member record lands on INEC's map, worked out once per uploaded list: [lga, ward
+// number or null, polling unit number or null, person]. Each distinct ward label goes through the
+// fuzzy matcher only once.
+// Per list: true for each record whose person already appeared earlier in the lists.
+function duplicateFlags(memberSets) {
+  const seen = new Set();
+  return memberSets.map((set) => {
+    const flags = set.records.map((record) => {
+      const again = seen.has(record[3]);
+      seen.add(record[3]);
+      return again;
+    });
+    return flags;
+  });
+}
+/** Duplicate records per area key from `key(record)` (undefined = outside this view). */
+function tallyDuplicates(memberSets, key) {
+  const flags = duplicateFlags(memberSets);
+  const out = new Map();
+  memberSets.forEach((set, i) => set.records.forEach((record, j) => {
+    if (!flags[i][j]) return;
+    const area = key(record);
+    if (area === undefined || area === null) return;
+    out.set(area, (out.get(area) || 0) + 1);
+  }));
+  return out;
+}
+
+const placedCache = new WeakMap();
+function placeRecords(set) {
+  if (placedCache.has(set.records)) return placedCache.get(set.records);
+  const resolvers = new Map();
+  const labels = new Map();
+  const placed = set.records.map((record) => {
+    const [lga, wardLabel, unit, person] = record;
+    if (!resolvers.has(lga)) resolvers.set(lga, wardResolver(lga));
+    const labelKey = `${lga}|${wardLabel}`;
+    if (!labels.has(labelKey)) labels.set(labelKey, wardLabel ? resolvers.get(lga)(wardLabel) : null);
+    const ward = labels.get(labelKey);
+    const onUnit = ward && unit && ward.units.some((item) => String(item.number) === String(unit)) ? Number(unit) : null;
+    return [lga, ward?.number ?? null, onUnit, person];
+  });
+  placedCache.set(set.records, placed);
+  return placed;
+}
+
+/** Cleaned members (on a real INEC unit) and the units they cover, per area key from `key`. */
+function tallyCleaned(memberSets, key) {
+  const areas = new Map();
+  for (const set of memberSets) {
+    for (const [lga, ward, unit, person] of placeRecords(set)) {
+      if (unit === null) continue;
+      const area = key(lga, ward, unit);
+      if (area === undefined) continue;
+      if (!areas.has(area)) areas.set(area, { people: new Set(), units: new Set() });
+      areas.get(area).people.add(person);
+      areas.get(area).units.add(`${ward}|${unit}`);
+    }
+  }
+  return areas;
 }
 
 const MIN_NAMED = 30;
@@ -183,6 +296,8 @@ function lgaView({ memberSets, contactSet, centerSet, reference, survey, registe
   const geo = oyoGeo();
   const surveyRows = surveyByLga(survey);
   const { areas } = tallyMembers(memberSets, (record) => record[0]);
+  const cleaned = tallyCleaned(memberSets, (lga) => lga);
+  const duplicates = tallyDuplicates(memberSets, (record) => record[0]);
   const report = centerSet?.report;
   const needsSurvey = surveyNeeds(survey);
   // Registered voters per LGA: uploaded reference, else the voter register, else the INEC PU register.
@@ -202,6 +317,8 @@ function lgaView({ memberSets, contactSet, centerSet, reference, survey, registe
     const pollingUnits = geoLga?.pollingUnits || lga.pollingUnits;
     const voterRegister = registerFigures(register?.lgas?.[lga.name]?.s, register?.bands || []);
     const registered = registeredOf(lga.name);
+    const clean = cleaned.get(lga.name);
+    const unitsReached = Math.min(clean?.units.size || 0, pollingUnits);
     const values = {
       // Uploaded NPC figure when there is one; otherwise the state projection shared out by each
       // LGA's share of registered voters (flagged as an estimate in the detail).
@@ -210,8 +327,15 @@ function lgaView({ memberSets, contactSet, centerSet, reference, survey, registe
       pvc: ref.pvcCollected ?? null,
       ...voterRegister.values,
       members: members ? members.all.size : 0,
+      cleaned: clean?.people.size || 0,
+      duplicates: memberSets.length ? duplicates.get(lga.name) || 0 : null,
       tenx: tenx ? tenx.byLga.get(lga.name) || 0 : null,
-      reached: share(Math.min(members?.units.size || 0, pollingUnits), pollingUnits),
+      promoters: tenx ? tenx.promoters.byLga.get(lga.name) || 0 : null,
+      // Reached = polling units with a member placed on a real INEC unit, as in the Pulse.
+      reached: share(unitsReached, pollingUnits),
+      activePhones: null,
+      projects: tenx ? tenx.projects.byLga.get(lga.name) || 0 : null,
+      projectCost: tenx?.projects.costed ? tenx.projects.cost.byLga.get(lga.name) || 0 : null,
       contacts: contactSet ? contactSet.counts[lga.name] || 0 : null,
       calls: report ? report.byLga[lga.name]?.calls || 0 : null,
       needs: needs[0]?.id || null,
@@ -219,17 +343,22 @@ function lgaView({ memberSets, contactSet, centerSet, reference, survey, registe
       undecided: surveyRow && surveyRow.responses >= MIN_NAMED ? share(surveyRow.responses - surveyRow.named, surveyRow.responses) : null,
       gov2023: gov?.apc ?? null,
       pres2023: pres?.apc ?? null,
+      turnout2023: geoLga ? turnoutOf(geoLga.wardList.flatMap((ward) => ward.units)) : null,
     };
     values.changeGov = support != null && values.gov2023 != null ? round(support - values.gov2023) : null;
     values.changePres = support != null && values.pres2023 != null ? round(support - values.pres2023) : null;
     values.membersPerPu = round(values.members / Math.max(pollingUnits, 1), 2);
     values.callsPer1k = values.calls != null && registered ? round((values.calls / registered) * 1000, 2) : null;
+    values.cleanedPerPu = round(values.cleaned / Math.max(pollingUnits, 1), 2);
+    values.promotersPerPu = values.promoters != null ? round(values.promoters / Math.max(pollingUnits, 1), 2) : null;
+    values.projectsPerPu = values.projects != null ? round(values.projects / Math.max(pollingUnits, 1), 3) : null;
+    values.projectCostPerPu = values.projectCost != null ? round(values.projectCost / Math.max(pollingUnits, 1), 0) : null;
     return {
       key: lga.name,
       name: lgaLabel(lga.name),
       pollingUnits,
       wards: geoLga?.wardList.length || lga.wards,
-      unitsWithMember: Math.min(members?.units.size || 0, pollingUnits),
+      unitsWithMember: unitsReached,
       values,
       detail: {
         survey: surveyRow ? { responses: surveyRow.responses, named: surveyRow.named, leader: surveyRow.leader, leaderShare: surveyRow.leaderShare } : null,
@@ -260,6 +389,8 @@ function wardView({ lga, memberSets, centerSet, register: voterRegister, tenx })
     if (!unitSets.has(ward.number)) unitSets.set(ward.number, new Set());
     unitSets.get(ward.number).add(record[2]);
   }
+  const cleaned = tallyCleaned(memberSets, (recordLga, ward) => (recordLga === lga ? ward : undefined));
+  const duplicates = tallyDuplicates(memberSets, (record) => (record[0] === lga ? resolve(record[1])?.number ?? null : undefined));
   const calls = new Map();
   let callsUnplaced = 0;
   for (const row of centerSet?.report?.byWard || []) {
@@ -279,13 +410,24 @@ function wardView({ lga, memberSets, centerSet, register: voterRegister, tenx })
       registered,
       ...figures.values,
       members: members ? members.all.size : 0,
+      cleaned: cleaned.get(ward.number)?.people.size || 0,
+      duplicates: memberSets.length ? duplicates.get(ward.number) || 0 : null,
       tenx: tenx ? tenx.byWard.get(`${lga}|${ward.number}`) || 0 : null,
+      promoters: tenx ? tenx.promoters.byWard.get(`${lga}|${ward.number}`) || 0 : null,
       reached: share(reachedUnits, ward.units.length),
       calls: centerSet ? calls.get(ward.number) || 0 : null,
+      activePhones: null,
+      projects: tenx ? tenx.projects.byWard.get(`${lga}|${ward.number}`) || 0 : null,
+      projectCost: tenx?.projects.costed ? tenx.projects.cost.byWard.get(`${lga}|${ward.number}`) || 0 : null,
       pres2023: pres?.apc ?? null,
+      turnout2023: turnoutOf(ward.units),
     };
     values.membersPerPu = round(values.members / Math.max(ward.units.length, 1), 2);
     values.callsPer1k = values.calls != null && registered ? round((values.calls / registered) * 1000, 2) : null;
+    values.cleanedPerPu = round(values.cleaned / Math.max(ward.units.length, 1), 2);
+    values.promotersPerPu = values.promoters != null ? round(values.promoters / Math.max(ward.units.length, 1), 2) : null;
+    values.projectsPerPu = values.projects != null ? round(values.projects / Math.max(ward.units.length, 1), 3) : null;
+    values.projectCostPerPu = values.projectCost != null ? round(values.projectCost / Math.max(ward.units.length, 1), 0) : null;
     return {
       key: String(ward.number),
       name: ward.name,
@@ -310,8 +452,10 @@ function unitView({ lga, wardNumber, memberSets, register: voterRegister, tenx }
     if (record[0] !== lga || resolve(record[1])?.number !== ward.number) return undefined;
     return unitNumbers.has(record[2]) ? record[2] : null;
   });
+  const duplicates = tallyDuplicates(memberSets, (record) => (record[0] === lga && resolve(record[1])?.number === ward.number && unitNumbers.has(record[2]) ? record[2] : undefined));
   const rows = ward.units.map((unit) => {
     const members = areas.get(String(unit.number));
+    const unitKey = `${lga}|${ward.number}|${unit.number}`;
     const pres = unit.pres ? presFromUnits([unit]) : null;
     const stats = voterRegister?.lgas?.[lga]?.wards?.[ward.number]?.units?.[unit.number];
     const figures = registerFigures(stats, voterRegister?.bands || []);
@@ -324,8 +468,15 @@ function unitView({ lga, wardNumber, memberSets, register: voterRegister, tenx }
         registered: stats?.v || unit.registered || null,
         ...figures.values,
         members: members ? members.all.size : 0,
-        tenx: tenx ? tenx.byUnit.get(`${lga}|${ward.number}|${unit.number}`) || 0 : null,
+        cleaned: members ? members.all.size : 0,
+        duplicates: memberSets.length ? duplicates.get(String(unit.number)) || 0 : null,
+        tenx: tenx ? tenx.byUnit.get(unitKey) || 0 : null,
+        promoters: tenx ? tenx.promoters.byUnit.get(unitKey) || 0 : null,
+        projects: tenx ? tenx.projects.byUnit.get(unitKey) || 0 : null,
+        projectCost: tenx?.projects.costed ? tenx.projects.cost.byUnit.get(unitKey) || 0 : null,
+        activePhones: null,
         pres2023: pres?.apc ?? null,
+        turnout2023: turnoutOf([unit]),
       },
       detail: { accredited: unit.accredited || null, pres2023: pres, sheet: unit.status, register: figures.detail },
     };
@@ -418,6 +569,56 @@ function unitInsights(rows, { wardName, unplaced }) {
   return out;
 }
 
+/**
+ * Critical alerts for the level on screen: high, medium or low, most serious first. Each names one
+ * place and says why in a few words, so the panel reads like a to-do list.
+ */
+function buildAlerts({ level, rows: areaRows, tenx, place }) {
+  const out = [];
+  // INEC writes ward and unit names in capitals; alerts read better in title case.
+  const rows = level === 'lga' ? areaRows : areaRows.map((row) => ({ ...row, name: titleCase(row.name) }));
+  const more = (count, unit) => `${count} more ${unit}${count === 1 ? '' : 's'}`;
+  const add = (severity, title, detail) => out.push({ severity, title, detail });
+  const byLargest = (list) => [...list].sort((a, b) => (b.values.registered || 0) - (a.values.registered || 0));
+  const pu = (row) => `PU ${String(row.number).padStart(3, '0')}`;
+  if (level !== 'pu') {
+    const unit = level === 'lga' ? 'LGA' : 'ward';
+    const membership = rows.filter((row) => row.values.registered).map((row) => ({ row, share: row.values.members / row.values.registered })).sort((a, b) => a.share - b.share);
+    if (membership[0]) add('high', `Low APC membership in ${membership[0].row.name}`, `Only ${(membership[0].share * 100).toFixed(1)}% of registered voters are members`);
+    const unreached = rows.map((row) => ({ row, gap: (row.pollingUnits || 0) - (row.unitsWithMember || 0) })).filter((item) => item.gap > 0).sort((a, b) => b.gap - a.gap);
+    if (unreached[0]) add('high', `Unreached polling units in ${unreached[0].row.name}`, `${fmt(unreached[0].gap)} of ${fmt(unreached[0].row.pollingUnits)} polling units not yet reached`);
+    const low = rows.filter((row) => row.values.support != null && row.values.support < 0.2).sort((a, b) => a.values.support - b.values.support);
+    if (low[0]) add('high', `Low support in ${low[0].name}`, `Sen. Alli has ${pct(low[0].values.support)} of named choices in the survey`);
+    const empty = rows.filter((row) => !row.values.members);
+    if (empty.length) add('high', `${empty.length} ${unit}${empty.length === 1 ? '' : 's'} with no member`, byLargest(empty).slice(0, 3).map((row) => row.name).join(', '));
+    const silent = byLargest(rows.filter((row) => row.values.calls === 0));
+    if (silent.length) add('medium', `No call-center calls in ${silent[0].name}`, `${fmt(silent[0].values.registered)} registered voters${silent.length > 1 ? ` · ${more(silent.length - 1, unit)} with none` : ''}`);
+    const dupes = rows.filter((row) => row.values.duplicates > 0).sort((a, b) => b.values.duplicates - a.values.duplicates);
+    if (dupes[0]) add('medium', `Duplicate member records in ${dupes[0].name}`, `${fmt(dupes[0].values.duplicates)} records repeat a person already listed`);
+    const uncleaned = rows.filter((row) => row.values.members > row.values.cleaned).map((row) => ({ row, gap: row.values.members - row.values.cleaned })).sort((a, b) => b.gap - a.gap);
+    if (uncleaned[0]) add('medium', `Party data needs cleaning in ${uncleaned[0].row.name}`, `${fmt(uncleaned[0].gap)} member records do not match an INEC polling unit`);
+    if (tenx) {
+      const thin = rows.filter((row) => row.values.tenx != null && row.pollingUnits).sort((a, b) => a.values.tenx / a.pollingUnits - b.values.tenx / b.pollingUnits);
+      if (thin[0]) add('medium', `Few 10x volunteers in ${thin[0].name}`, `${fmt(thin[0].values.tenx)} volunteers for ${fmt(thin[0].pollingUnits)} polling units`);
+      const noProject = byLargest(rows.filter((row) => row.values.projects === 0));
+      if (noProject.length) add('low', `No community project in ${noProject[0].name}`, noProject.length > 1 ? `and ${more(noProject.length - 1, unit)}` : 'Nothing submitted or ongoing');
+    }
+    const turnout = rows.filter((row) => row.values.turnout2023 != null).sort((a, b) => a.values.turnout2023 - b.values.turnout2023);
+    if (turnout[0]) add('low', `Low 2023 turnout in ${turnout[0].name}`, `${pct(turnout[0].values.turnout2023)} of registered voters were accredited`);
+  } else {
+    const empty = byLargest(rows.filter((row) => !row.values.members));
+    if (empty.length) add('high', `${empty.length} polling unit${empty.length === 1 ? '' : 's'} with no member${place ? ` in ${titleCase(place)}` : ''}`, `Largest: ${pu(empty[0])} ${empty[0].name} (${fmt(empty[0].values.registered)} voters)`);
+    const lostEmpty = rows.filter((row) => row.values.pres2023 != null && row.values.pres2023 < 0.5 && !row.values.members);
+    if (lostEmpty.length) add('medium', `APC lost ${lostEmpty.length} unit${lostEmpty.length === 1 ? '' : 's'} in 2023 with no member now`, lostEmpty.slice(0, 3).map(pu).join(', '));
+    const turnout = rows.filter((row) => row.values.turnout2023 != null).sort((a, b) => a.values.turnout2023 - b.values.turnout2023);
+    if (turnout[0]) add('low', `Lowest 2023 turnout: ${pu(turnout[0])}`, `${pct(turnout[0].values.turnout2023)} of registered voters were accredited`);
+    const noSheet = rows.filter((row) => row.detail.sheet === 'n').length;
+    if (noSheet) add('low', `${noSheet} unit${noSheet === 1 ? '' : 's'} without a 2023 result sheet`, 'Turnout and 2023 shares are missing there');
+  }
+  const rank = { high: 0, medium: 1, low: 2 };
+  return out.sort((a, b) => rank[a.severity] - rank[b.severity]).slice(0, 8);
+}
+
 export function buildMap({ datasets = [], survey = null, lga = '', ward = '', register = null, tenx: tenxData = null }) {
   const tenx = tenxCounts(tenxData);
   const memberSets = datasets.filter((item) => item.kind === 'members');
@@ -452,12 +653,14 @@ export function buildMap({ datasets = [], survey = null, lga = '', ward = '', re
     }
   }
   const order = { risk: 0, watch: 1, good: 2, info: 3 };
+  const alerts = buildAlerts({ level, rows, tenx, place: wardInfo?.name });
   const layers = Object.fromEntries(Object.entries(LAYERS).map(([key, layer]) => [key, {
     ...layer,
     available: layer.levels.includes(level) && rows.some((row) => row.values[key] != null && row.values[key] !== 0),
     loaded: lgaRows.some((row) => row.values[key] != null && row.values[key] !== 0),
     // Why an empty layer is empty, when it is not something an upload fixes.
-    ...(layer.source === 'oyo10x' ? { hint: !tenxData ? 'oyo10x is not connected to this platform yet' : 'oyo10x has not reported volunteers by area yet' } : {}),
+    ...(layer.source === 'oyo10x' ? { hint: !tenxData ? 'oyo10x is not connected to this platform yet' : key === 'projectCost' ? '10x does not send project cost estimates yet' : key === 'projects' ? '10x has not shared community projects yet' : key === 'promoters' ? '10x has not reported promoters by area yet' : 'oyo10x has not reported volunteers by area yet' } : {}),
+    ...(SOURCE_HINTS[layer.source] ? { hint: SOURCE_HINTS[layer.source] } : {}),
   }]));
   return {
     level,
@@ -467,6 +670,10 @@ export function buildMap({ datasets = [], survey = null, lga = '', ward = '', re
     comparisons: Object.fromEntries(Object.entries(COMPARISONS).filter(([, item]) => item.levels.includes(level)).map(([key, item]) => [key, { label: item.label, needs: item.needs }])),
     totals: {
       members: new Set(memberSets.flatMap((set) => set.records.map((record) => record[3]))).size,
+      cleaned: lgaRows.reduce((sum, row) => sum + row.values.cleaned, 0),
+      records: memberSets.reduce((sum, set) => sum + set.records.length, 0),
+      duplicates: lgaRows.reduce((sum, row) => sum + (row.values.duplicates || 0), 0),
+      promoters: tenxData?.totals?.unitPromoters ?? null,
       tenx: tenx?.total ?? null,
       contacts: contactSet ? Object.values(contactSet.counts).reduce((sum, value) => sum + value, 0) : null,
       calls: centerSet?.report?.overview.calls ?? null,
@@ -474,6 +681,12 @@ export function buildMap({ datasets = [], survey = null, lga = '', ward = '', re
     },
     context,
     rows,
+    alerts,
+    // For the LGA and ward dropdowns.
+    options: {
+      lgas: lgaRows.map((row) => ({ key: row.key, name: row.name })),
+      wards: wantedLga ? (oyoGeo().lgas.get(wantedLga)?.wardList || []).map((item) => ({ number: item.number, name: item.name })) : [],
+    },
     ranking: [...rows].filter((row) => row.priorityReasons?.length).sort((a, b) => b.values.priority - a.values.priority).slice(0, 6).map((row) => ({ key: row.key, name: row.name, number: row.number, priority: row.values.priority, reasons: row.priorityReasons })),
     insights: insights.sort((a, b) => order[a.tone] - order[b.tone]),
     sources: {

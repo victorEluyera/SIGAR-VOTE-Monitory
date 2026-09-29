@@ -1,0 +1,235 @@
+{
+  "id": "social-listening-2026-09-18",
+  "source": "Social listening report (sharafadeenalli vs Bimbo Adekanmbi)",
+  "period": {
+    "from": "2026-09-18",
+    "to": "2026-09-24",
+    "label": "18–24 Sep 2026"
+  },
+  "note": "Figures printed in the report are exact; the other bar segments were measured from its charts (within about half a point). Changes compare with the week before, both candidates together.",
+  "subjects": {
+    "us": "Sen. Alli",
+    "rival": "Bimbo Adekanmbi"
+  },
+  "totals": {
+    "mentions": {
+      "us": 5100,
+      "rival": 1900
+    },
+    "engagement": {
+      "us": 22700,
+      "rival": 4700
+    },
+    "reach": {
+      "us": 75500000,
+      "rival": 80800000
+    }
+  },
+  "sentiment": {
+    "labels": {
+      "positive": "Positive",
+      "neutral": "Neutral",
+      "negative": "Negative"
+    },
+    "us": {
+      "positive": 13.7,
+      "neutral": 71.9,
+      "negative": 14.4
+    },
+    "rival": {
+      "positive": 30.8,
+      "neutral": 54.2,
+      "negative": 15
+    },
+    "change": {
+      "positive": -47,
+      "neutral": 13,
+      "negative": 95
+    }
+  },
+  "emotion": {
+    "labels": {
+      "anger": "Anger",
+      "joy": "Joy",
+      "love": "Love",
+      "sadness": "Sadness",
+      "other": "Other"
+    },
+    "us": {
+      "anger": 43.6,
+      "joy": 23.9,
+      "love": 24.1,
+      "sadness": 6.7,
+      "other": 1.7
+    },
+    "rival": {
+      "anger": 26.8,
+      "joy": 44.6,
+      "love": 13.8,
+      "sadness": 8.9,
+      "other": 5.9
+    },
+    "change": {
+      "anger": 20,
+      "joy": -36,
+      "love": 0,
+      "sadness": -38,
+      "other": -70
+    }
+  },
+  "hashtags": [
+    {
+      "tag": "#OyoAhead",
+      "count": 87,
+      "side": "us"
+    },
+    {
+      "tag": "#BoyeNationXJafMovement",
+      "count": 39,
+      "side": "rival"
+    },
+    {
+      "tag": "#BimboAdekanmbi",
+      "count": 35,
+      "side": "rival"
+    },
+    {
+      "tag": "#BAM2027",
+      "count": 24,
+      "side": "rival"
+    },
+    {
+      "tag": "#APM",
+      "count": 22,
+      "side": "rival"
+    },
+    {
+      "tag": "#Omituntun3",
+      "count": 19,
+      "side": "rival"
+    },
+    {
+      "tag": "#BodijaMarket",
+      "count": 14,
+      "side": "rival"
+    },
+    {
+      "tag": "#Alliisok",
+      "count": 13,
+      "side": "us"
+    },
+    {
+      "tag": "#OyoAPC",
+      "count": 11,
+      "side": "us"
+    }
+  ],
+  "voices": [
+    {
+      "name": "Instablog9ja",
+      "reach": 6900000,
+      "sentiment": "neutral"
+    },
+    {
+      "name": "Oloye Akin Alabi",
+      "reach": 1600000,
+      "sentiment": "neutral"
+    },
+    {
+      "name": "Prof @OOlusore",
+      "reach": 541000,
+      "sentiment": "neutral"
+    },
+    {
+      "name": "Oyo Affairs",
+      "reach": 215800,
+      "sentiment": "neutral"
+    },
+    {
+      "name": "@Mario9jaa",
+      "reach": 86500,
+      "sentiment": "negative"
+    }
+  ],
+  "negativeTopic": "the exchange with Governor Makinde",
+  "topics": {
+    "positive": [
+      {
+        "subject": "us",
+        "text": "APC Ona-Ara chapter says it is \"ready, united and determined\" for Tinubu and Sen. Alli"
+      },
+      {
+        "subject": "us",
+        "text": "Sen. Alli elevated in the Olubadan (Ibadanland) chieftaincy line"
+      },
+      {
+        "subject": "rival",
+        "text": "Supporters present Adekanmbi as a qualified professional (FCCA) who can be trusted to deliver"
+      },
+      {
+        "subject": "rival",
+        "text": "Adekanmbi visits to traditional leaders in Kishi and Igbeti"
+      }
+    ],
+    "negative": [
+      {
+        "subject": "us",
+        "text": "Gov. Makinde says Sen. Alli, a lawyer, \"never handled a case\"; Sen. Alli replies on diesel-powered streetlights and \"engineering incompetence\""
+      },
+      {
+        "subject": "us",
+        "text": "Criticism of state governance (a leaking stadium, diesel streetlights) turns into a back-and-forth between camps"
+      },
+      {
+        "subject": "both",
+        "text": "Partisan and Yoruba-identity friction between Sen. Alli and Adekanmbi supporters"
+      }
+    ]
+  },
+  "activity": {
+    "results": 6800,
+    "busiest": [
+      {
+        "when": "Friday 3pm",
+        "results": 315
+      },
+      {
+        "when": "Monday 6pm",
+        "results": 258
+      }
+    ],
+    "quietest": "2am–5am"
+  },
+  "audience": {
+    "interests": [
+      {
+        "name": "Government",
+        "us": 604,
+        "rival": 379
+      },
+      {
+        "name": "Sports",
+        "us": 390
+      }
+    ],
+    "occupations": [
+      {
+        "name": "Engineers",
+        "us": 323
+      },
+      {
+        "name": "Writers",
+        "us": 239
+      },
+      {
+        "name": "Lawyers",
+        "us": 123,
+        "rival": 101
+      },
+      {
+        "name": "Politicians",
+        "rival": 100
+      }
+    ]
+  }
+}

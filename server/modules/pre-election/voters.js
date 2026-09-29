@@ -31,8 +31,10 @@ const statusOf = (reach) => (reach == null ? null : REACH_STATUS.find((status) =
 const fmt = (value) => Number(value || 0).toLocaleString('en-US');
 const pct = (value, digits = 0) => `${((value || 0) * 100).toFixed(digits)}%`;
 // "EKUNLE II" -> "Ekunle II", "L.A. SCHOOL" -> "L.A. School": Roman numerals and initials stay capitals.
-const titleCase = (value) => String(value || '').toLowerCase()
+export const titleCase = (value) => String(value || '').toLowerCase()
   .replace(/(^|[\s/(-])([a-z])/g, (match, lead, char) => lead + char.toUpperCase())
+  // Ward codes such as N6A or NW8 stay in capitals.
+  .replace(/\b[a-z]*\d[a-z\d]*\b/gi, (code) => code.toUpperCase())
   .replace(/\b(i{1,3}|iv|vi{0,3}|ix|xi{0,2})\b/gi, (numeral) => numeral.toUpperCase())
   .replace(/\b([a-z])\.(?=[a-z]\.)|(?<=\.)([a-z])\./gi, (match) => match.toUpperCase());
 

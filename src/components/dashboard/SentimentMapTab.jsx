@@ -3,7 +3,7 @@ import L from "leaflet";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "../../api/client.js";
 import { oyoBoundariesQuery } from "../../queries/boundaries.js";
-import { wardByName } from "../../../shared/wardMatch.js";
+import { wardByName, wardNumber } from "../../../shared/wardMatch.js";
 import { escapeHtml, featureLgaName, lgaKey } from "../stakeholder/ui.jsx";
 import { useFitHeight } from "./useFitHeight.js";
 import "./sentiment-map.css";
@@ -15,7 +15,7 @@ import { createStreetLayer } from "../../mapTiles.js";
  * unit. Every figure comes from /api/pre-election/map; this file only draws it.
  */
 
-const GROUPS = ["Register", "Ground", "Outreach", "Opinion", "History"];
+const GROUPS = ["Register", "Ground", "10x", "Outreach", "Opinion", "History"];
 const DEFAULT_LAYERS = ["members", "calls", "needs"];
 // Faint for low values, deep for high ones: the eye reads the darkest areas as "most".
 // Colours say how an area is doing without a legend: red = weak, amber = middle, green = strong,
@@ -25,7 +25,10 @@ const DEFAULT_LAYERS = ["members", "calls", "needs"];
 const STRENGTH = ["#c0392b", "#e67e22", "#f2c14e", "#7cb342", "#2e7d32"];
 const NEED = [...STRENGTH].reverse();
 const NEUTRAL = ["#dbeafe", "#93c5fd", "#60a5fa", "#2563eb", "#1e3a8a"];
-const STRENGTH_KEYS = new Set(["members", "tenx", "reached", "calls", "contacts", "membersPerPu", "callsPer1k", "pvc", "phone", "gov2023", "pres2023"]);
+const STRENGTH_KEYS = new Set(["members", "cleaned", "cleanedPerPu", "tenx", "promoters", "promotersPerPu", "projects", "projectsPerPu", "reached", "calls", "contacts", "activePhones", "membersPerPu", "callsPer1k", "pvc", "phone", "gov2023", "pres2023", "turnout2023"]);
+// Measures where more is worse (red = most).
+const PROBLEM_KEYS = new Set(["duplicates"]);
+const PROBLEM_WORDS = ["Clean", "Few", "Some", "Many", "Most"];
 const STRENGTH_WORDS = ["Weak", "Below average", "Middle", "Good", "Strong"];
 const NEED_WORDS = ["Low priority", "Some need", "Needs attention", "High need", "Top priority"];
 const DIV = ["#b8452f", "#e08a6b", "#e9e1e4", "#8fcf8f", "#2f9e44"];
@@ -60,7 +63,11 @@ function labelPoint(feature) {
   }
   return best ? L.latLng(best.lat, best.lng) : L.geoJSON(feature).getBounds().getCenter();
 }
-const titleCase = (value) => String(value || "").toLowerCase().replace(/(^|[\s/(-])([a-z])/g, (match, lead, char) => lead + char.toUpperCase());
+// INEC names are in capitals: title-case them, keeping Roman numerals (Ward III) and codes (N6A).
+const titleCase = (value) => String(value || "").toLowerCase()
+  .replace(/(^|[\s/(-])([a-z])/g, (match, lead, char) => lead + char.toUpperCase())
+  .replace(/\b[a-z]*\d[a-z\d]*\b/gi, (code) => code.toUpperCase())
+  .replace(/\b(i{1,3}|iv|vi{0,3}|ix|xi{0,2})\b/gi, (numeral) => numeral.toUpperCase());
 const NEED_COLORS = { roads: "#e0a458", electricity: "#f5dc9a", water: "#5ec8ff", money: "#7fcf7f", jobs: "#c9748f", security: "#ff8a5c", health: "#b39ddb", education: "#80cbc4", agriculture: "#9ccc65", sanitation: "#a1887f" };
 const SHARE_BINS = [0.2, 0.35, 0.5, 0.65];
 const CHANGE_BINS = [-0.2, -0.05, 0.05, 0.25];
@@ -90,34 +97,61 @@ function formatValue(key, value, meta) {
   if (key === "needs") return needLabel(value);
   if (key === "occupation") return OCCUPATION_LABELS[value] || value;
   if (key === "priority") return `${Math.round(value * 100)}/100`;
-  if (key === "membersPerPu" || key === "callsPer1k") return Number(value).toFixed(1);
+  if (key === "membersPerPu" || key === "callsPer1k" || key === "cleanedPerPu" || key === "promotersPerPu") return Number(value).toFixed(1);
+  if (key === "projectsPerPu") return Number(value).toFixed(2);
+  if (meta?.format === "naira" || key === "projectCostPerPu") return `₦${compact(value)}`;
   return meta?.format === "share" ? pct(value) : num(value);
 }
 
-/** Colour rule for the chosen measure over the current rows: { color(value), rate(value) -> word or null }. */
+/**
+ * Colour rule for the chosen measure over the current rows: { color(value), rate(value) -> word
+ * or null, legend: [{ color, label }] } so the legend always shows exactly what the map uses.
+ */
 function scaleFor(key, meta, rows) {
-  if (key === "needs") {
-    return { color: (value) => NEED_COLORS[value] || "#8f7d86", rate: null };
-  }
-  if (key === "occupation") {
-    return { color: (value) => OCCUPATION_COLORS[value] || "#8f7d86", rate: null };
-  }
+  const present = (colors, labels) => [...new Set(rows.map((row) => row.values[key]).filter(Boolean))].map((id) => ({ color: colors[id] || "#8f7d86", label: labels(id) }));
+  if (key === "needs") return { color: (value) => NEED_COLORS[value] || "#8f7d86", rate: null, legend: present(NEED_COLORS, needLabel) };
+  if (key === "occupation") return { color: (value) => OCCUPATION_COLORS[value] || "#8f7d86", rate: null, legend: present(OCCUPATION_COLORS, (id) => OCCUPATION_LABELS[id] || id) };
+  const show = (value) => formatValue(key, value, meta);
+  const bands = (palette, edges, words) => palette.map((color, i) => ({
+    color,
+    label: `${words ? `${words[i]} · ` : ""}${i === 0 ? `under ${show(edges[0])}` : i === palette.length - 1 ? `${show(edges[i - 1])}+` : `${show(edges[i - 1])}–${show(edges[i])}`}`,
+  }));
   if (key === "changeGov" || key === "changePres") {
-    const color = (value) => DIV[CHANGE_BINS.findIndex((edge) => value < edge) === -1 ? 4 : CHANGE_BINS.findIndex((edge) => value < edge)];
-    return { color, rate: null };
+    const step = (value) => { const i = CHANGE_BINS.findIndex((edge) => value < edge); return i === -1 ? 4 : i; };
+    return { color: (value) => DIV[step(value)], rate: null, legend: bands(DIV, CHANGE_BINS, null) };
   }
-  const palette = key === "priority" ? NEED : STRENGTH_KEYS.has(key) ? STRENGTH : NEUTRAL;
-  const words = key === "priority" ? NEED_WORDS : STRENGTH_KEYS.has(key) ? STRENGTH_WORDS : null;
-  const scaled = (step) => ({ color: (value) => palette[step(value)], rate: words ? (value) => words[step(value)] : null });
+  const palette = key === "priority" || PROBLEM_KEYS.has(key) ? NEED : STRENGTH_KEYS.has(key) ? STRENGTH : NEUTRAL;
+  const words = key === "priority" ? NEED_WORDS : PROBLEM_KEYS.has(key) ? PROBLEM_WORDS : STRENGTH_KEYS.has(key) ? STRENGTH_WORDS : null;
+  const scaled = (edges) => {
+    const step = (value) => { const i = edges.findIndex((edge) => value < edge); return i === -1 ? 4 : i; };
+    return { color: (value) => palette[step(value)], rate: words ? (value) => words[step(value)] : null, legend: bands(palette, edges, words) };
+  };
   // 2023 vote shares keep fixed bands, so 50%+ always reads as won.
-  if (key === "gov2023" || key === "pres2023") return scaled((value) => { const i = SHARE_BINS.findIndex((edge) => value < edge); return i === -1 ? 4 : i; });
+  if (key === "gov2023" || key === "pres2023") return scaled(SHARE_BINS);
   // Everything else is ranked against the areas on screen: the top fifth is "Strong" here.
   const values = rows.map((row) => row.values[key]).filter((value) => value != null && Number.isFinite(value)).sort((a, b) => a - b);
-  if (!values.length) return { color: () => NO_DATA, rate: null };
-  // Every area has the same value (e.g. no members in any ward yet): one middle colour, no ranking.
-  if (values[0] === values[values.length - 1]) return { color: () => (words && values[0] === 0 ? palette[0] : palette[2]), rate: null };
-  const edges = [0.2, 0.4, 0.6, 0.8].map((q) => values[Math.min(values.length - 1, Math.floor(q * values.length))]);
-  return scaled((value) => { const i = edges.findIndex((edge) => value < edge); return i === -1 ? 4 : i; });
+  if (!values.length) return { color: () => NO_DATA, rate: null, legend: [] };
+  // Every area has the same value (e.g. no members in any ward yet): one colour, no ranking.
+  if (values[0] === values[values.length - 1]) {
+    const color = words && values[0] === 0 ? palette[0] : palette[2];
+    return { color: () => color, rate: null, legend: [{ color, label: `All ${show(values[0])}` }] };
+  }
+  return scaled([0.2, 0.4, 0.6, 0.8].map((q) => values[Math.min(values.length - 1, Math.floor(q * values.length))]));
+}
+
+/** What the colours and circles on the map mean. */
+function Legend({ title, scale, dotLabel, hasNoData, top = false }) {
+  if (!scale?.legend?.length) return null;
+  return (
+    <div className={`smp-legend${top ? " smp-legend-top" : ""}`} aria-label="Map legend">
+      <b>{title}</b>
+      <div>
+        {scale.legend.map((item) => <span key={item.label}><i style={{ background: item.color }} />{item.label}</span>)}
+        {hasNoData && <span><i className="smp-hatch" />No data</span>}
+      </div>
+      {dotLabel && <span className="smp-dotnote"><i />Circles: {dotLabel.toLowerCase()} (bigger = more)</span>}
+    </div>
+  );
 }
 
 async function fetchWardBoundaries(lgaName, token, signal) {
@@ -194,12 +228,80 @@ function AreaCard({ area, data, selected, measure, onOpen }) {
   );
 }
 
+const SEVERITY = { high: "High", medium: "Medium", low: "Low" };
+
+/** The alerts for the level on screen, most serious first; four show until "View all". */
+function AlertsCard({ alerts }) {
+  const [all, setAll] = useState(false);
+  if (!alerts?.length) return null;
+  const shown = all ? alerts : alerts.slice(0, 4);
+  return (
+    <section className="smp-card smp-alerts" aria-label="Critical alerts">
+      <header>
+        <h3><span className="smp-alert-mark" aria-hidden="true">!</span>Critical alerts <span className="smp-count">{alerts.length}</span></h3>
+        {alerts.length > 4 && <button type="button" className="smp-link" onClick={() => setAll((value) => !value)}>{all ? "Show fewer" : "View all →"}</button>}
+      </header>
+      <ul>
+        {shown.map((alert) => (
+          <li key={alert.title} className={alert.severity}>
+            <i aria-hidden="true">{alert.severity === "low" ? "i" : "!"}</i>
+            <div><b>{alert.title}</b><small>{alert.detail}</small></div>
+            <em>{SEVERITY[alert.severity]}</em>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** One layer group as a Power BI-style slicer: a dropdown of tick boxes. */
+function LayerSlicer({ group, layers, selected, level, badges, open, onOpen, onToggle, onClear }) {
+  const items = Object.entries(layers).filter(([, layer]) => layer.group === group);
+  if (!items.length) return null;
+  const on = items.filter(([key]) => selected.includes(key));
+  return (
+    <div className={`smp-slicer${open ? " open" : ""}`}>
+      <button type="button" className={`smp-slicer-btn${on.length ? " has" : ""}`} aria-expanded={open} aria-haspopup="true" onClick={onOpen}>
+        <span>{group}</span>
+        <b>{on.length ? (on.length === 1 ? on[0][1].label : `${on.length} selected`) : "None"}</b>
+        <i aria-hidden="true">▾</i>
+      </button>
+      {open && (
+        <div className="smp-slicer-menu">
+          {items.map(([key, layer]) => {
+            const off = !layer.loaded;
+            const here = layer.levels.includes(level);
+            const why = off ? layer.hint || "Not loaded yet: upload it in Tools → Manage Data" : !here ? `Shown at ${layer.levels.map((item) => LEVEL_NAMES[item]).join(" / ")} level` : layer.note || "";
+            return (
+              <label key={key} className={`${off ? "off" : ""}${!here ? " dim" : ""}`} title={why}>
+                <input type="checkbox" checked={selected.includes(key)} disabled={off} onChange={() => onToggle(key)} />
+                <span>{layer.label}{off && <small>{why}</small>}</span>
+                <em>{off ? (layer.source === "oyo10x" ? "10x" : layer.source === "ncc" ? "NCC" : "upload") : badges[key] || ""}</em>
+              </label>
+            );
+          })}
+          {on.length > 0 && <button type="button" className="smp-slicer-clear" onClick={onClear}>Clear {group.toLowerCase()}</button>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SentimentMapTab({ authToken, initialLga = null }) {
   const [lga, setLga] = useState(initialLga); // { key, name }
   const [ward, setWard] = useState(null); // { number, name }
   const [selected, setSelected] = useState(DEFAULT_LAYERS);
   const [colourBy, setColourBy] = useState("membersPerPu");
   const [view, setView] = useState("layers");
+  const [openGroup, setOpenGroup] = useState(null); // which layer slicer is open
+  const slicersRef = useRef(null);
+  useEffect(() => {
+    if (!openGroup) return undefined;
+    const close = (event) => { if (event.type === "keydown" ? event.key === "Escape" : !slicersRef.current?.contains(event.target)) setOpenGroup(null); };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", close); };
+  }, [openGroup]);
   // The area whose figures show on the right: set by a click, cleared when the level changes.
   const [picked, setPicked] = useState(null);
   const [basemap, setBasemap] = useState(() => { try { return localStorage.getItem("smp-basemap") || "street"; } catch { return "street"; } });
@@ -253,12 +355,25 @@ export default function SentimentMapTab({ authToken, initialLga = null }) {
     const wardRows = level === "ward" ? rows : [];
     const names = (level === "ward" ? rows : [{ name: data?.ward?.name }]).map((row) => row.name).filter(Boolean);
     const byName = new Map(wardRows.map((row) => [row.name, row]));
-    return wardFeatures.map((feature) => {
+    const byNumber = new Map((data?.options?.wards || []).map((item) => [item.number, item.name]));
+    const matched = new Set();
+    const items = wardFeatures.map((feature) => {
       const p = feature.properties || {};
-      const match = [p.ward, ...String(p.ward_alt_names || "").split(/[;,|]/)].map((name) => wardByName(name, names)).find(Boolean);
+      const labels = [p.ward, ...String(p.ward_alt_names || "").split(/[;,|]/)].map((name) => String(name || "").trim()).filter(Boolean);
+      // GRID3 often names Ibadan wards by area and keeps the INEC number in another name
+      // ("Agbowo Ward 12"), so the number is the fallback.
+      let match = labels.map((name) => wardByName(name, names)).find(Boolean);
+      if (!match) match = byNumber.get(labels.map((name) => wardNumber(name)).find(Boolean)) || "";
+      if (match && !names.includes(match)) match = "";
+      if (match) matched.add(match);
       return { feature, row: level === "ward" ? byName.get(match) : null, current: level === "pu" && match === data?.ward?.name };
     }).filter((item) => level === "ward" || item.current);
+    items.matchedNames = matched;
+    return items;
   }, [level, rows, lgaBoundaries.data, wardBoundaries.data, data]);
+
+  // Wards the boundary map could not place (GRID3 and INEC name them differently): shown as tiles.
+  const unplacedRows = useMemo(() => (level === "ward" && wardBoundaries.isFetched ? rows.filter((row) => !features.matchedNames?.has(row.name)) : []), [level, rows, features, wardBoundaries.isFetched]);
 
   const drill = (row) => {
     if (!row) return;
@@ -376,11 +491,22 @@ export default function SentimentMapTab({ authToken, initialLga = null }) {
 
   const toggle = (key) => setSelected((current) => (current.includes(key) ? current.filter((item) => item !== key) : [...current, key]));
   const totals = data.totals;
-  const pillValue = { population: "est.", registered: compact(totals.registered), members: compact(totals.members), tenx: totals.tenx != null ? compact(totals.tenx) : null, contacts: compact(totals.contacts), calls: compact(totals.calls) };
+  const pillValue = { population: "est.", registered: compact(totals.registered), members: compact(totals.members), cleaned: totals.cleaned != null ? compact(totals.cleaned) : null, duplicates: totals.duplicates != null ? compact(totals.duplicates) : null, promoters: totals.promoters != null ? compact(totals.promoters) : null, tenx: totals.tenx != null ? compact(totals.tenx) : null, contacts: compact(totals.contacts), calls: compact(totals.calls) };
+  const pickLga = (key) => {
+    setPicked(null);
+    setWard(null);
+    const option = data.options?.lgas.find((item) => item.key === key);
+    setLga(option ? { key: option.key, name: option.name } : null);
+  };
+  const pickWard = (number) => {
+    setPicked(null);
+    const option = data.options?.wards.find((item) => String(item.number) === number);
+    setWard(option ? { number: option.number, name: option.name } : null);
+  };
   // Always the latest figures for the picked area (a refetch replaces the row objects).
   const pickedRow = picked ? rows.find((row) => row.key === picked.key) || null : null;
   const card = pickedRow || (level === "ward" ? data.context : null);
-  const boundaryMissing = level === "lga" ? lgaBoundaries.isError || !lgaBoundaries.data?.lgas : wardBoundaries.isFetched && !features.length;
+  const boundaryMissing = level === "lga" ? lgaBoundaries.isError || !lgaBoundaries.data?.lgas : level === "pu" && wardBoundaries.isFetched && !features.length;
 
   return (
     <section ref={fitRef} style={fitHeight ? { height: fitHeight } : undefined} className={`smp${query.isFetching ? " smp-busy" : ""}`} aria-label="Insight map">
@@ -392,7 +518,19 @@ export default function SentimentMapTab({ authToken, initialLga = null }) {
           <small>{level === "lga" ? "click an LGA for details · double-click to open its wards" : level === "ward" ? "click a ward for details · double-click to open its polling units" : "click a polling unit for details"}</small>
         </nav>
         <div className="smp-controls">
-          <label>Colour by
+          <label className="smp-field">LGA
+            <select value={lga?.key || ""} onChange={(event) => pickLga(event.target.value)}>
+              <option value="">All 33 LGAs</option>
+              {(data.options?.lgas || []).map((item) => <option key={item.key} value={item.key}>{item.name}</option>)}
+            </select>
+          </label>
+          <label className="smp-field">Ward
+            <select value={ward ? String(ward.number) : ""} onChange={(event) => pickWard(event.target.value)} disabled={!lga}>
+              <option value="">{lga ? "All wards" : "Pick an LGA first"}</option>
+              {(data.options?.wards || []).map((item) => <option key={item.number} value={String(item.number)}>{titleCase(item.name)}</option>)}
+            </select>
+          </label>
+          <label className="smp-field">Colour by
             <select value={view === "priority" ? "" : colourBy} onChange={(event) => { setView("layers"); setColourBy(event.target.value); }} disabled={view === "priority"}>
               {colourOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
             </select>
@@ -401,37 +539,26 @@ export default function SentimentMapTab({ authToken, initialLga = null }) {
             <button type="button" className={view === "layers" ? "on" : ""} onClick={() => setView("layers")}>Layers</button>
             <button type="button" className={view === "priority" ? "on" : ""} onClick={() => setView("priority")}>Priority score</button>
           </div>
-          <div className="smp-seg" role="group" aria-label="Level">
-            {["lga", "ward", "pu"].map((item) => (
-              <button key={item} type="button" className={level === item ? "on" : ""} disabled={(item === "ward" && !lga) || (item === "pu" && !ward)} onClick={() => goTo(item)}>{LEVEL_NAMES[item]}</button>
-            ))}
-          </div>
         </div>
       </div>
 
-      <div className="smp-pills" role="group" aria-label="Map layers">
+      <div className="smp-slicers" ref={slicersRef} role="group" aria-label="Map layers">
+        <span className="smp-slicers-title">Layers</span>
         {GROUPS.map((group) => (
-          <div key={group} className="smp-group">
-            <b>{group}</b>
-            {Object.entries(data.layers).filter(([, layer]) => layer.group === group).map(([key, layer]) => {
-              const here = layer.levels.includes(level);
-              const off = !layer.loaded;
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  className={`smp-pill${selected.includes(key) ? " on" : ""}${group === "History" ? " hist" : ""}${off ? " off" : ""}${!here ? " dim" : ""}`}
-                  aria-pressed={selected.includes(key)}
-                  disabled={off}
-                  title={off ? layer.hint || "Not loaded yet: upload it in Tools → Manage Data" : !here ? `Shown at ${layer.levels.map((item) => LEVEL_NAMES[item]).join(" / ")} level` : ""}
-                  onClick={() => toggle(key)}
-                >
-                  <span className="smp-box" />{layer.label}{off ? <em>{layer.source === "oyo10x" ? "not yet" : "upload"}</em> : pillValue[key] && <em>{pillValue[key]}</em>}
-                </button>
-              );
-            })}
-          </div>
+          <LayerSlicer
+            key={group}
+            group={group}
+            layers={data.layers}
+            selected={selected}
+            level={level}
+            badges={pillValue}
+            open={openGroup === group}
+            onOpen={() => setOpenGroup((current) => (current === group ? null : group))}
+            onToggle={toggle}
+            onClear={() => setSelected((current) => current.filter((key) => data.layers[key]?.group !== group))}
+          />
         ))}
+        <button type="button" className="smp-reset" onClick={() => { setSelected(DEFAULT_LAYERS); setOpenGroup(null); }}>Reset</button>
       </div>
 
       <div className="smp-main">
@@ -443,6 +570,23 @@ export default function SentimentMapTab({ authToken, initialLga = null }) {
               {Object.entries(BASEMAPS).map(([id, item]) => <option key={id} value={id}>{item.label}</option>)}
             </select>
           </label>
+          <Legend title={view === "priority" ? "Priority score" : colourOptions.find((option) => option.key === colourBy)?.label} scale={scale} dotLabel={dotKey ? data.layers[dotKey]?.label : null} hasNoData={features.some((item) => !item.row) || rows.some((row) => row.values[measure] == null)} top={level === "pu" || unplacedRows.length > 0} />
+          {unplacedRows.length > 0 && (
+            <div className="smp-units smp-unplaced">
+              <b>{unplacedRows.length === rows.length ? `The boundary map names every ward in ${lga?.name} differently from INEC, so they are shown here` : `${unplacedRows.length} ward${unplacedRows.length === 1 ? "" : "s"} with no matching boundary on the map`} · click for details, double-click to open</b>
+              <div>
+                {unplacedRows.map((row) => {
+                  const value = row.values[measure];
+                  const fill = value == null ? NO_DATA : scale.color(value);
+                  return (
+                    <button key={row.key} type="button" onClick={() => setPicked(row)} onDoubleClick={() => drill(row)} aria-pressed={pickedRow?.key === row.key} className={pickedRow?.key === row.key ? "picked" : ""} style={{ background: fill, color: DEEP.has(fill) ? "#f7eff2" : "#2b0816" }} title={`${titleCase(row.name)} · ${formatValue(measure, value, measureMeta)}`}>
+                      {titleCase(row.name)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {boundaryMissing && <p className="smp-overlay-note">Boundaries for this level could not be loaded. The side panel and polling-unit grid still work.</p>}
           {level === "pu" && (
             <div className="smp-units">
@@ -464,6 +608,7 @@ export default function SentimentMapTab({ authToken, initialLga = null }) {
         </div>
 
         <aside className="smp-side">
+          <AlertsCard key={`${level}|${lga?.key || ""}|${ward?.number || ""}`} alerts={data.alerts} />
           {card ? <AreaCard area={card} data={data} selected={selected} measure={measure} onOpen={level !== "pu" && card !== data.context ? () => drill(card) : null} />
             : <section className="smp-card"><header><div><h3>{level === "lga" ? "All 33 LGAs" : data.ward?.name}</h3><p>Click an area to see its figures</p></div></header>
               <dl>

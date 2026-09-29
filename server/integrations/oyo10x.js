@@ -30,6 +30,17 @@ const areaRows = (rows, label) => (Array.isArray(rows) ? rows : [])
   .map((row) => ({ ...label(row), members: count(row?.members ?? row?.registered), verified: count(row?.verified), unitPromoters: count(row?.unit_promoters), grassroots: count(row?.grassroots) }))
   .filter((row) => row.name);
 
+// oyo10x's project statuses, folded into the four stages the Overview shows. "Not started" is
+// checked before "ongoing" because it contains "started"; anything unrecognised is "other".
+const PROJECT_STAGES = [
+  ['completed', /complet|done|finish|deliver|commission/i],
+  ['notStarted', /not.?started|approv|pending|planned|await|queue/i],
+  ['ongoing', /ongoing|progress|start|under.?way|execut|active/i],
+  ['submitted', /promis|submit|propos|request|new|draft/i],
+];
+export const projectStage = (status) => PROJECT_STAGES.find(([, pattern]) => pattern.test(String(status || '')))?.[0] || 'other';
+const placeKey = (value) => String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
 export function sanitizeOyo10x(raw = {}) {
   const summary = raw.summary || {};
   const totals = summary.totals || {};
@@ -54,6 +65,32 @@ export function sanitizeOyo10x(raw = {}) {
     byStatus.set(status, (byStatus.get(status) || 0) + 1);
   }
   const statedProjectTotal = count(raw.projects?.total);
+  // Where projects are: place names and counts only (their candidate names and site pins stay out).
+  const stages = { submitted: 0, notStarted: 0, ongoing: 0, completed: 0, other: 0 };
+  const projectWards = new Set();
+  const projectsByLga = new Map();
+  const projectsByWard = new Map();
+  const projectsByUnit = new Map();
+  for (const row of realProjects) {
+    stages[projectStage(row.status)] += 1;
+    const lga = String(row.lga || '').trim();
+    if (!lga) continue;
+    projectsByLga.set(lga, (projectsByLga.get(lga) || 0) + 1);
+    if (placeKey(row.ward)) projectWards.add(`${placeKey(lga)}|${placeKey(row.ward)}`);
+    // Per ward, with the estimated cost when 10x sends one (naira; any non-number is ignored).
+    const wardKey = `${placeKey(lga)}|${placeKey(row.ward)}`;
+    if (!projectsByWard.has(wardKey)) projectsByWard.set(wardKey, { lga, ward: String(row.ward || '').trim(), projects: 0, cost: 0 });
+    const bucket = projectsByWard.get(wardKey);
+    bucket.projects += 1;
+    bucket.cost += count(row.estimated_cost ?? row.cost ?? row.budget);
+    const unit = String(row.polling_unit_code ?? row.polling_unit ?? '').trim();
+    if (unit) {
+      const unitKey = `${wardKey}|${placeKey(unit)}`;
+      if (!projectsByUnit.has(unitKey)) projectsByUnit.set(unitKey, { lga, ward: String(row.ward || '').trim(), code: /\d/.test(unit) ? unit : '', name: /\d/.test(unit) ? '' : unit, projects: 0, cost: 0 });
+      projectsByUnit.get(unitKey).projects += 1;
+      projectsByUnit.get(unitKey).cost += count(row.estimated_cost ?? row.cost ?? row.budget);
+    }
+  }
 
   return {
     sourceGeneratedAt: raw.generated_at || summary.generated_at || null,
@@ -104,6 +141,11 @@ export function sanitizeOyo10x(raw = {}) {
     projects: {
       total: realProjects.length,
       byStatus: [...byStatus.entries()].map(([status, total]) => ({ status, count: total })),
+      stages,
+      wards: projectWards.size,
+      byLga: [...projectsByLga.entries()].map(([name, total]) => ({ name, projects: total })),
+      byWard: [...projectsByWard.values()],
+      byPollingUnit: [...projectsByUnit.values()],
       partial: projectRows.length < statedProjectTotal,
       testRecordsExcluded: projectRows.length - realProjects.length,
     },

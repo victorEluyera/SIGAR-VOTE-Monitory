@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { apiRequest } from "../../api/client.js";
 import { useFitHeight } from "./useFitHeight.js";
+import { compact, EMOTION_COLORS, Hashtags, SENTIMENT_COLORS, ShareCard } from "./OverviewTab.jsx";
 import "./pre-election-views.css";
 
 /**
@@ -9,6 +10,9 @@ import "./pre-election-views.css";
  * form (share links and signed-in field agents), the call center and 10x, compared side by side
  * and combined into one ranking of what they are asking for. Admins manage share links and the
  * proposed projects voters rate here.
+ *
+ * On top: one card per channel (call center, 10x field work, online), each opening its own
+ * analysis, and the critical intelligence drawn from all three.
  */
 
 const CHANNELS = [
@@ -76,6 +80,127 @@ function Scale({ title, scale }) {
       <h4>{title} <small>{num(scale.answered)} answers</small></h4>
       <div className="pv-stack">{scale.rows.map((row, i) => <i key={row.name} title={`${row.name}: ${pct(row.share)}`} style={{ width: `${(row.share || 0) * 100}%`, background: SCALE_COLORS[Math.min(i, SCALE_COLORS.length - 1)] }} />)}</div>
       <ul className="fb-scale-legend">{scale.rows.map((row, i) => <li key={row.name}><i style={{ background: SCALE_COLORS[Math.min(i, SCALE_COLORS.length - 1)] }} />{row.name} <b>{pct(row.share)}</b></li>)}</ul>
+    </div>
+  );
+}
+
+const WEEKDAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const dayLabel = (date) => { const d = new Date(`${date}T12:00:00`); return Number.isNaN(d.getTime()) ? date : `${WEEKDAY[d.getDay()]} ${d.getDate()}`; };
+const sentenceCase = (text) => { const words = String(text || "").toLowerCase(); return words.charAt(0).toUpperCase() + words.slice(1); };
+const EMOTION_ORDER = ["anger", "joy", "love", "sadness", "other"];
+
+/** A channel summary: three figures and a small bar chart. The whole card opens its analysis. */
+function ChannelCard({ title, sub, stats, bars, open, onToggle, accent }) {
+  const peak = Math.max(...bars.map((bar) => bar.value || 0), 0.0001);
+  return (
+    <button type="button" className={`fb-channel${open ? " on" : ""}`} style={{ "--fb-accent": accent }} aria-expanded={open} onClick={onToggle}>
+      <span className="fb-channel-head"><b>{title}</b><small>{sub}</small></span>
+      <span className="fb-stats">
+        {stats.map((stat) => (
+          <span key={stat.label} className="fb-stat"><small>{stat.label}</small><b className={stat.tone || ""}>{stat.value}</b><em>{stat.note}</em></span>
+        ))}
+      </span>
+      {bars.length > 0 && (
+        <span className="fb-daybars" aria-hidden="true">
+          {bars.map((bar) => (
+            <span key={bar.label}><em>{bar.display}</em><i style={{ height: `${Math.max((bar.value / peak) * 100, 4)}%`, background: bar.color }} /><small>{bar.label}</small></span>
+          ))}
+        </span>
+      )}
+      <span className="fb-more">{open ? "Hide analysis ▴" : "Show analysis ▾"}</span>
+    </button>
+  );
+}
+
+/** Label, bar, value rows scaled to the largest. */
+function BarList({ rows, format = (value) => num(value) }) {
+  if (!rows?.length) return <p className="pv-note">Nothing recorded yet.</p>;
+  const peak = Math.max(...rows.map((row) => row.value || 0), 0.0001);
+  return (
+    <ul className="pv-bars">
+      {rows.map((row) => <li key={row.name}><span>{row.name}</span><em><u style={{ width: `${(row.value / peak) * 100}%` }} /></em><b>{format(row.value)}</b></li>)}
+    </ul>
+  );
+}
+
+function Block({ title, sub, children }) {
+  return <div className="fb-block"><h4>{title}{sub && <small> {sub}</small>}</h4>{children}</div>;
+}
+
+function CallCenterAnalysis({ channel }) {
+  const d = channel.detail;
+  return (
+    <div className="fb-drill-grid">
+      <Block title="What callers raise" sub={`· ${d.themeUnit}`}><BarList rows={d.themes.map((row) => ({ name: row.label, value: row.calls }))} /></Block>
+      {d.requests.length > 0 && <Block title="What callers ask for"><BarList rows={d.requests.map((row) => ({ name: row.label, value: row.calls }))} /></Block>}
+      <Block title="Calls by LGA" sub={`· ${d.lgasCalled} LGAs · ${num(d.wardsReached)} wards reached`}><BarList rows={d.byLga.map((row) => ({ name: row.name, value: row.calls }))} /></Block>
+      <Block title="Who we spoke to"><BarList rows={d.contactTypes.map((row) => ({ name: row.name, value: row.calls }))} /></Block>
+      <Block title="What the calls were about"><BarList rows={d.categories.map((row) => ({ name: row.name, value: row.calls }))} /></Block>
+      {d.inbound != null && (
+        <Block title="Call traffic">
+          <ul className="pv-list">
+            <li><span>Outbound · inbound</span><b>{num(d.outbound)} · {num(d.inbound)}</b></li>
+            <li><span>Still open</span><b>{num(channel.open)}</b></li>
+            <li><span>Asked for a follow-up</span><b>{num(channel.followUp)}</b></li>
+            <li><span>Party unity or leadership disputes</span><b>{num(d.partyDisputes)}</b></li>
+          </ul>
+        </Block>
+      )}
+    </div>
+  );
+}
+
+function FieldAnalysis({ channel }) {
+  const d = channel.detail;
+  const shares = (rows) => rows.map((row) => ({ name: row.name, value: row.share }));
+  return (
+    <div className="fb-drill-grid">
+      <Block title="Top issue"><BarList rows={shares(channel.topIssues)} format={pct} /></Block>
+      <Block title="Biggest problem in their LGA"><BarList rows={shares(d.lgaProblem)} format={pct} /></Block>
+      <Block title="Satisfied with the government?"><BarList rows={shares(d.satisfaction)} format={pct} /></Block>
+      <Block title="Where they get information"><BarList rows={shares(d.platform)} format={pct} /></Block>
+      <Block title="What could stop them voting"><BarList rows={shares(d.barrier)} format={pct} /></Block>
+      <Block title="What matters in a candidate"><BarList rows={shares(d.candidateFactor)} format={pct} /></Block>
+      {d.strongest.length > 0 && (
+        <Block title="Sen. Alli by LGA" sub="· of people who named a candidate">
+          <div className="pv-two">
+            <div><p className="fb-mini-head good">Strongest</p><BarList rows={d.strongest.map((row) => ({ name: row.name, value: row.share }))} format={pct} /></div>
+            <div><p className="fb-mini-head risk">Weakest</p><BarList rows={d.weakest.map((row) => ({ name: row.name, value: row.share }))} format={pct} /></div>
+          </div>
+        </Block>
+      )}
+      {d.byLga.length > 0 && <Block title="Most field answers"><BarList rows={d.byLga.map((row) => ({ name: row.name, value: row.answers }))} /></Block>}
+    </div>
+  );
+}
+
+function OnlineAnalysis({ channel }) {
+  const subjects = channel.subjects;
+  return (
+    <div className="fb-online">
+      <Block title="What it tells us" sub={`· ${channel.period.label}`}>
+        <ol className="pv-intel">{channel.feedback.map((item) => <li key={item.text} className={item.tone}>{item.text}</li>)}</ol>
+      </Block>
+      <div className="fb-drill-grid">
+        <ShareCard title="Share of sentiment" sub="Positive, neutral or negative" block={channel.sentiment} subjects={subjects} colors={SENTIMENT_COLORS} />
+        <ShareCard title="Share of emotion" sub="The feeling each mention carries" block={channel.emotion} subjects={subjects} colors={EMOTION_COLORS} />
+        <Block title="Driving positive talk">
+          <ul className="fb-topics good">{channel.topics.positive.map((topic) => <li key={topic.text}>{topic.text}</li>)}</ul>
+        </Block>
+        <Block title="Driving negative talk">
+          <ul className="fb-topics risk">{channel.topics.negative.map((topic) => <li key={topic.text}>{topic.text}</li>)}</ul>
+        </Block>
+        <Block title={`Biggest voices on ${subjects.us}`}>
+          <ul className="pv-list">{channel.voices.map((voice) => <li key={voice.name}><span>{voice.name}{voice.sentiment === "negative" ? " · negative" : ""}</span><b>{compact(voice.reach)} reach</b></li>)}</ul>
+        </Block>
+        <Block title="Hashtags"><Hashtags tags={channel.hashtags} /></Block>
+        <Block title="Who is talking" sub={`· ${subjects.us}`}>
+          <ul className="pv-list">
+            {channel.audience.interests.filter((row) => row.us).map((row) => <li key={row.name}><span>Interested in {row.name.toLowerCase()}</span><b>{num(row.us)}</b></li>)}
+            {channel.audience.occupations.filter((row) => row.us).map((row) => <li key={row.name}><span>{row.name}</span><b>{num(row.us)}</b></li>)}
+          </ul>
+        </Block>
+      </div>
     </div>
   );
 }
@@ -173,6 +298,7 @@ function ProjectManager({ authToken, lgas }) {
 
 export default function FeedbackAnalysisTab({ authToken }) {
   const [lga, setLga] = useState("");
+  const [open, setOpen] = useState("callers"); // which channel's analysis is showing
   const [fitRef, fitHeight] = useFitHeight();
   const query = useQuery({
     queryKey: ["feedback-analysis", lga],
@@ -188,6 +314,8 @@ export default function FeedbackAnalysisTab({ authToken }) {
   const s = data.sources;
   const allLgas = data.byLga.slice().sort((a, b) => a.name.localeCompare(b.name));
   const p = data.perception;
+  const { callCenter, field, online, critical } = data.channels;
+  const toggle = (id) => setOpen((current) => (current === id ? null : id));
   return (
     <section ref={fitRef} style={fitHeight ? { height: fitHeight } : undefined} className={`pv${query.isFetching ? " pv-busy" : ""}`} aria-label="Feedback analysis">
       <div className="pv-bar">
@@ -204,8 +332,58 @@ export default function FeedbackAnalysisTab({ authToken }) {
         <div className="pv-kpi"><span>Field survey</span><strong>{num(s.field.responses)}</strong><small>answers in the field survey file</small></div>
         <div className="pv-kpi"><span>Feedback form</span><strong>{num(s.form.responses)}</strong><small>{num(s.form.byAgents)} by {num(s.form.agents)} agent{s.form.agents === 1 ? "" : "s"} · {num(s.form.public)} public</small></div>
         <div className="pv-kpi"><span>Call center</span><strong>{num(s.callCenter.calls)}</strong><small>{s.callCenter.available ? `calls${s.callCenter.period ? ` · ${s.callCenter.period}` : ""}` : "no report loaded"}</small></div>
-        <div className="pv-kpi"><span>10x surveys</span><strong>{s.tenx.responses != null ? num(s.tenx.responses) : "—"}</strong><small>{!s.tenx.available ? "oyo10x not connected" : data.lga ? "state-wide only" : `${num(s.tenx.surveys)} surveys · totals only`}</small></div>
+        <div className="pv-kpi"><span>10x field work</span><strong>{field.available ? num(field.responses) : "—"}</strong><small>{field.available ? `field survey answers${field.collectors ? ` · ${field.collectors} collectors` : ""}` : "no field survey yet"}</small></div>
         <div className="pv-kpi pv-kpi-lead"><span>Sen. Alli, first choice</span><strong>{pct(data.intention.field.share)}</strong><small>field survey{data.intention.link.named >= 10 ? ` · ${pct(data.intention.link.share)} on the form` : ""}</small></div>
+      </div>
+
+      <div className="fb-hub">
+        <div className="fb-hub-main">
+          <div className="fb-channels">
+            {callCenter.available ? (
+              <ChannelCard title="Contact center" sub={`${callCenter.period}${callCenter.scope === "lga" ? ` · ${data.place}` : " · calls per day"}`} accent="#2bb5a8" open={open === "callers"} onToggle={() => toggle("callers")}
+                stats={[
+                  { label: "Calls", value: num(callCenter.calls), note: `${num(callCenter.people)} people` },
+                  callCenter.supporters ? { label: "Supporters", value: pct(callCenter.supporters.share), note: `${num(callCenter.supporters.count)} confirmed` } : { label: "Wards reached", value: num(callCenter.detail.wardsReached), note: "in this LGA" },
+                  callCenter.open != null ? { label: "Still open", value: num(callCenter.open), note: `${num(callCenter.followUp)} follow-ups`, tone: "risk" } : { label: "Top issue", value: callCenter.detail.themes[0]?.label.split(" ")[0] || "—", note: "from callers" },
+                ]}
+                bars={callCenter.scope === "state" ? callCenter.perDay.map((row) => ({ label: dayLabel(row.date), value: row.calls, display: num(row.calls) })) : callCenter.detail.themes.slice(0, 5).map((row) => ({ label: row.label.split(" ")[0], value: row.calls, display: num(row.calls) }))} />
+            ) : <div className="fb-channel fb-channel-empty"><b>Contact center</b><small>No call-center report loaded. Upload it in Tools → Manage Data.</small></div>}
+            {field.available ? (
+              <ChannelCard title="10x field work" sub={`Field survey${field.collectors ? ` · ${field.collectors} collectors` : ""} · top issues`} accent="#d9aa4b" open={open === "field"} onToggle={() => toggle("field")}
+                stats={[
+                  { label: "Answers", value: num(field.responses), note: data.place },
+                  { label: "Sen. Alli", value: pct(field.focusShare), note: "of named choices" },
+                  { label: "Not decided", value: pct(field.undecided), note: "named no one", tone: "watch" },
+                ]}
+                bars={field.topIssues.map((row) => ({ label: sentenceCase(row.name).split(/[ &/]/)[0], value: row.share, display: pct(row.share) }))} />
+            ) : <div className="fb-channel fb-channel-empty"><b>10x field work</b><small>No field survey loaded yet.</small></div>}
+            {online.available ? (
+              <ChannelCard title="Online" sub={`${online.period.label} · state-wide · emotion`} accent="#b061c9" open={open === "online"} onToggle={() => toggle("online")}
+                stats={[
+                  { label: "Mentions", value: compact(online.totals.mentions.us), note: `${compact(online.totals.engagement.us)} engaged` },
+                  { label: "Positive", value: `${online.sentiment.us.positive}%`, note: `${online.sentiment.us.neutral}% neutral` },
+                  { label: "Negative", value: `${online.sentiment.us.negative}%`, note: `${online.sentiment.change.negative > 0 ? "↑" : "↓"}${Math.abs(online.sentiment.change.negative)}% vs last wk`, tone: "risk" },
+                ]}
+                bars={EMOTION_ORDER.map((id) => ({ label: online.emotion.labels[id], value: online.emotion.us[id], display: `${Math.round(online.emotion.us[id])}%`, color: EMOTION_COLORS[id] }))} />
+            ) : <div className="fb-channel fb-channel-empty"><b>Online</b><small>No social-listening report loaded yet.</small></div>}
+          </div>
+
+          {open && (
+            <section className="pv-card fb-drill" aria-label="Channel analysis">
+              <header><h3>{{ callers: "Contact center analysis", field: "10x field work analysis", online: "Online conversation analysis" }[open]}</h3><p>{{ callers: `${callCenter.period} · ${data.place}`, field: `Field survey answers · ${data.place}`, online: `${online.source} · ${online.period.label} · state-wide` }[open]}</p></header>
+              {open === "callers" && callCenter.available && <CallCenterAnalysis channel={callCenter} />}
+              {open === "field" && field.available && <FieldAnalysis channel={field} />}
+              {open === "online" && online.available && <OnlineAnalysis channel={online} />}
+            </section>
+          )}
+        </div>
+
+        <aside className="pv-card fb-critical" aria-label="Critical intelligence">
+          <header><h3>Critical intelligence</h3><p>Situational analysis from the call center, 10x and online</p></header>
+          <ol>
+            {critical.map((item) => <li key={item.text} className={item.tone}><span className="fb-src">{item.source}</span><p>{item.text}</p></li>)}
+          </ol>
+        </aside>
       </div>
 
       <div className="pv-main">
@@ -234,7 +412,7 @@ export default function FeedbackAnalysisTab({ authToken }) {
 
         <div className="pv-side">
           <section className="pv-card">
-            <header><h3>Intelligence from the people</h3><p>{data.place}</p></header>
+            <header><h3>Across all channels</h3><p>{data.place}</p></header>
             <ol className="pv-intel">{data.insights.map((item) => <li key={item.text} className={item.tone}>{item.text}</li>)}</ol>
           </section>
           {data.canManage && <LinkManager authToken={authToken} lgas={allLgas} />}

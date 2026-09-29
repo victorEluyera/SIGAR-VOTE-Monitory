@@ -117,3 +117,27 @@ test('map: drilling into wards and polling units keeps members and calls placed'
   assert.ok(units.rows.filter((row) => row.values.members > 0).length >= 30);
   assert.ok(units.insights.length > 0);
 });
+
+test('map: cleaned party data, 2023 turnout, dropdown options and critical alerts', () => {
+  const datasets = withBaseline([]);
+  const survey = baselineSurvey();
+  const register = baselineRegister();
+  const map = buildMap({ datasets, survey, register });
+  const sum = (key) => map.rows.reduce((total, row) => total + (row.values[key] || 0), 0);
+  assert.ok(sum('cleaned') > 0 && sum('cleaned') <= sum('members'), 'cleaned members are a subset of members');
+  assert.equal(map.rows.reduce((total, row) => total + row.unitsWithMember, 0), 5992, 'reached matches the Pulse');
+  assert.ok(map.rows.every((row) => row.values.turnout2023 == null || (row.values.turnout2023 > 0 && row.values.turnout2023 <= 1)));
+  assert.equal(map.options.lgas.length, 33);
+  assert.equal(map.layers.activePhones.loaded, false);
+  assert.match(map.layers.activePhones.hint, /NCC/);
+  assert.ok(map.alerts.length > 0 && map.alerts.length <= 8);
+  const rank = { high: 0, medium: 1, low: 2 };
+  assert.ok(map.alerts.every((alert, i, all) => !i || rank[all[i - 1].severity] <= rank[alert.severity]), 'most serious first');
+  const wards = buildMap({ datasets, survey, register, lga: 'Ibadan North' });
+  assert.equal(wards.options.wards.length, 12);
+  assert.ok(wards.alerts.every((alert) => !/[A-Z]{5,}/.test(alert.title.replace(/NW\d|N\d+A?/g, ''))), 'ward names are title-cased');
+  const tenx = { totals: { registered: 10 }, byLga: [], byWard: [], byPollingUnit: [], projects: { byWard: [{ lga: 'Ibadan North', ward: 'Ward I N2', projects: 2, cost: 5_000_000 }] } };
+  const withProjects = buildMap({ datasets, survey, register, lga: 'Ibadan North', tenx });
+  assert.equal(withProjects.rows.find((row) => row.number === 1).values.projects, 2);
+  assert.equal(withProjects.rows.find((row) => row.number === 1).values.projectCost, 5_000_000);
+});

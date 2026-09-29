@@ -37,6 +37,8 @@ const MIN_QUOTE = 5;
 const share = (part, whole) => (whole ? Number((part / whole).toFixed(4)) : null);
 const fmt = (value) => Number(value || 0).toLocaleString('en-US');
 const pct = (value) => `${Math.round((value || 0) * 100)}%`;
+// Lowercase for use mid-sentence, keeping abbreviations: "PVC Issue" -> "PVC issue".
+const inSentence = (text) => String(text || '').split(' ').map((word) => (/^[A-Z0-9/]{2,}$/.test(word) ? word : word.toLowerCase())).join(' ');
 const phraseKey = (text) => String(text || '').toLowerCase().replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' ').trim();
 
 /** A field survey answer in the form's wording ('' when blank). */
@@ -249,7 +251,7 @@ export function buildFeedbackAnalysis({ survey = null, responses = [], links = [
   const heard = sources.field.responses + sources.form.responses + (calls || 0);
   add('info', `${fmt(heard)} voices heard in ${place}: ${fmt(sources.field.responses)} field survey answers, ${fmt(sources.form.responses)} feedback forms${sources.form.byAgents ? ` (${fmt(sources.form.byAgents)} by field agents)` : ''}, ${fmt(calls || 0)} call-center calls${sources.tenx.responses ? `, and ${fmt(sources.tenx.responses)} 10x survey responses` : ''}.`);
   const top = needs.filter((need) => need.channels >= 2).slice(0, 3);
-  if (top.length) add('risk', `What people ask for most, across channels: ${top.map((need) => need.label.toLowerCase()).join(', ')}.`);
+  if (top.length) add('risk', `What people ask for most, across channels: ${top.map((need) => inSentence(need.label)).join(', ')}.`);
   const callerFirst = [...needs].filter((need) => need.callers != null && need.field != null).sort((a, b) => (b.callers - b.field) - (a.callers - a.field))[0];
   if (callerFirst && callerFirst.callers - callerFirst.field > 0.08) add('watch', `${callerFirst.label} comes up far more on calls (${pct(callerFirst.callers)} of requests) than in the survey (${pct(callerFirst.field)}): an urgent, local need the survey under-states.`);
   const q = (id) => questions.find((item) => item.id === id);
@@ -258,14 +260,14 @@ export function buildFeedbackAnalysis({ survey = null, responses = [], links = [
   const noPvc = q('hasPvc').rows.filter((row) => row.name !== 'Yes').reduce((sum, row) => sum + (row.link || 0), 0);
   if (q('hasPvc').linkAnswered >= 10 && noPvc > 0.1) add('risk', `${pct(noPvc)} of people on the feedback form have no PVC yet or are awaiting it: a collection drive is needed.`);
   const barrier = q('barrier').rows.find((row) => row.name !== 'Nothing');
-  if (barrier) add('watch', `The main thing that could stop people voting: ${barrier.name.toLowerCase()}.`);
+  if (barrier) add('watch', `The main thing that could stop people voting: ${inSentence(barrier.name)}.`);
   const platform = q('platform').rows[0];
   if (platform) add('info', `${platform.name} is where most people get their political information.`);
   const good = perception.goodGovernor;
   if (good.answered >= 10) add(good.rows[0].share >= 0.5 ? 'good' : 'watch', `${pct(good.rows[0].share)} of people on the feedback form think ${FOCUS_CANDIDATE} would make a good governor; ${pct(good.rows.find((row) => row.name === "Don't Know Enough").share)} say they don't know enough about him.`);
   const topProject = projectRows.find((project) => project.ratings >= 5);
   if (topProject) add('info', `Most needed project so far: ${topProject.title} (${topProject.lga}${topProject.ward ? `, ${topProject.ward}` : ''}), rated ${topProject.average}/10 by ${fmt(topProject.ratings)} people.`);
-  if (facilities.total) add('watch', `${fmt(facilities.total)} facilities or problem spots reported${facilities.byType[0] ? `, most often: ${facilities.byType[0].type.toLowerCase()}` : ''}.`);
+  if (facilities.total) add('watch', `${fmt(facilities.total)} facilities or problem spots reported${facilities.byType[0] ? `, most often: ${inSentence(facilities.byType[0].type)}` : ''}.`);
   const silent = byLga.filter((row) => !row.field && !row.link && !row.calls);
   if (silent.length && !wanted) add('risk', `No feedback at all yet from ${silent.slice(0, 5).map((row) => row.name).join(', ')}${silent.length > 5 ? ` and ${silent.length - 5} more` : ''}. Share the link there.`);
   if (!form.length) add('info', 'No feedback forms yet. Create a share link and send it on WhatsApp, to coordinators and field agents.');

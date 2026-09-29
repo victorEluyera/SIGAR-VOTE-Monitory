@@ -5,7 +5,7 @@ import { buildXlsx } from '../voter-survey/test-fixtures.js';
 import { baselineRegister, baselineSurvey, withBaseline } from './baseline.js';
 import { birthDateKey, buildDataset, personNameKey } from './datasets.js';
 import { buildMap } from './map.js';
-import { buildOverview } from './overview.js';
+import { buildOverview, onlineReport } from './overview.js';
 import { buildPulse } from './pulse.js';
 import { buildVoterAnalysis, memberMatchKeys, uniqueTenx } from './voters.js';
 
@@ -96,6 +96,30 @@ test('overview: vote intention without naming any rival, reach, call center and 
   assert.equal(overview.numbers.lgasReached, 33);
   assert.equal(overview.numbers.pollingUnitsReached, 5992);
   assert.equal(overview.standing.reduce((sum, band) => sum + band.lgas.length, 0), 33);
-  assert.ok(overview.requests.survey.length && overview.requests.callers.length && overview.platforms.length);
+  assert.equal(overview.coverage.length, 10);
+  assert.ok(overview.coverage.every((row, i, rows) => !i || rows[i - 1].share <= row.share), 'weakest coverage first');
+  assert.equal(overview.intelligence.length, 5);
+  assert.equal(overview.numbers.pvcUncollected, Math.round(overview.numbers.registered * (1 - overview.numbers.pvcRate)));
+  assert.equal(overview.tenx.connected, false);
+  assert.equal(overview.projects, null);
   assert.equal(overview.callCenter.calls, 1204);
+});
+
+test('overview: 10x promoters and projects, and the online report, feed the numbers and the five alerts', () => {
+  const datasets = withBaseline([]);
+  const survey = baselineSurvey();
+  const tenx = { totals: { unitPromoters: 5832 }, coverage: { pollingUnits: 4210 }, projects: { total: 3, stages: { submitted: 1, notStarted: 0, ongoing: 1, completed: 1, other: 0 }, wards: 2, byLga: [{ name: 'Ibadan North', projects: 3 }] } };
+  const overview = buildOverview({ pulse: buildPulse({ datasets, survey }), map: buildMap({ datasets, survey, register: baselineRegister() }), tenx, online: onlineReport(), promoterTarget: 750000 });
+  assert.deepEqual(overview.tenx, { connected: true, promoters: 5832, target: 750000, pollingUnits: 4210, updatedAt: null });
+  assert.equal(overview.projects.wards, 2);
+  assert.equal(overview.projects.lgas, 1);
+  assert.equal(overview.projects.lgasWithout.length, 32);
+  const alerts = Object.fromEntries(overview.intelligence.map((item) => [item.id, item.text]));
+  assert.match(alerts.projects, /^349 of 351 wards/);
+  assert.match(alerts.media, /Anger is 43.6%/);
+  const online = overview.online;
+  for (const side of ['us', 'rival']) {
+    assert.ok(Math.abs(Object.values(online.sentiment[side]).reduce((a, b) => a + b, 0) - 100) < 0.2);
+    assert.ok(Math.abs(Object.values(online.emotion[side]).reduce((a, b) => a + b, 0) - 100) < 0.2);
+  }
 });

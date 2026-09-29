@@ -1,12 +1,17 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { matchLga } from './lga.js';
+
 /**
  * The pre-election Overview: what a candidate or stakeholder should see first, from the same
  * figures as the Pulse and the Insight map so no two tabs disagree.
  *
- * It reports the campaign's own standing only. Rival candidates are never named: vote intention is
- * Sen. Alli's share against "other candidates" and "no candidate named".
+ * The voter intention poll never names a rival: it is Sen. Alli against "other candidates" and "not
+ * decided". The only rival shown anywhere is in the online report, which is itself a head-to-head.
  */
 
-// Where each LGA stands, from Sen. Alli's survey share among people who named a candidate.
+// Sen. Alli's survey share among people who named a candidate.
 export const STANDING = [
   { id: 'strong', label: 'Strong', from: 0.5 },
   { id: 'leaning', label: 'Leaning our way', from: 0.35 },
@@ -16,83 +21,152 @@ export const STANDING = [
 const standingOf = (share) => (share == null ? 'nodata' : STANDING.find((band) => share >= band.from).id);
 const fmt = (value) => Number(value || 0).toLocaleString('en-US');
 const pct = (value) => `${Math.round((value || 0) * 100)}%`;
+const list = (names) => (names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0] || '');
 
-export function buildOverview({ pulse, map }) {
+// The 10x promoter target (one promoter per ~4 voters is the campaign's plan); override per deployment.
+export const PROMOTER_TARGET = Number(process.env.TENX_PROMOTER_TARGET) > 0 ? Number(process.env.TENX_PROMOTER_TARGET) : 750_000;
+const STATE_WARDS = 351;
+
+// Coverage status for a whole LGA: red under 90% of its polling units, amber to 95%, green above.
+const coverageStatus = (share) => (share < 0.9 ? 'risk' : share < 0.95 ? 'watch' : 'good');
+
+const ONLINE_FILE = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'data', 'online-report.json');
+let onlineCache;
+/** The latest social-listening report shipped with the app, or null. */
+export function onlineReport() {
+  if (onlineCache !== undefined) return onlineCache;
+  try {
+    onlineCache = existsSync(ONLINE_FILE) ? JSON.parse(readFileSync(ONLINE_FILE, 'utf8')) : null;
+  } catch (error) {
+    console.warn('[pre-election] Online report could not be read:', error.message);
+    onlineCache = null;
+  }
+  return onlineCache;
+}
+
+function projectsView(tenx, lgaRows) {
+  const projects = tenx?.projects;
+  if (!projects || !projects.total) return null;
+  const withProjects = new Set((projects.byLga || []).map((row) => matchLga(row.name)).filter(Boolean));
+  const without = lgaRows.filter((row) => !withProjects.has(row.lga)).sort((a, b) => (b.registeredVoters || 0) - (a.registeredVoters || 0));
+  return {
+    total: projects.total,
+    stages: projects.stages || null,
+    wards: projects.wards ?? null,
+    wardsTotal: STATE_WARDS,
+    lgas: withProjects.size,
+    lgasWithout: without.map((row) => row.label),
+    partial: Boolean(projects.partial),
+  };
+}
+
+export function buildOverview({ pulse, map, tenx = null, online = null, promoterTarget = PROMOTER_TARGET }) {
   const survey = pulse.survey || {};
   const focus = survey.focus || null;
   const responses = survey.responses || 0;
   const named = survey.named || 0;
   const focusVotes = focus?.votes || 0;
-  const weightedFocus = focus ? survey.weighted?.rows?.find((row) => row.name === focus.name)?.share ?? null : null;
 
   const intention = survey.available && focus ? {
     share: focus.share, // of people who named a candidate
     votes: focusVotes,
     named,
     responses,
-    weightedShare: weightedFocus,
-    // Of everyone surveyed: us, other candidates (unnamed here), no candidate named.
+    weightedShare: survey.weighted?.rows?.find((row) => row.name === focus.name)?.share ?? null,
     split: [
       { id: 'us', label: 'Sen. Alli', count: focusVotes, share: responses ? focusVotes / responses : 0 },
       { id: 'others', label: 'Other candidates', count: named - focusVotes, share: responses ? (named - focusVotes) / responses : 0 },
-      { id: 'none', label: 'No candidate named yet', count: responses - named, share: responses ? (responses - named) / responses : 0 },
+      { id: 'none', label: 'Not decided', count: responses - named, share: responses ? (responses - named) / responses : 0 },
     ],
   } : null;
-
-  const lgas = map.rows.map((row) => ({ key: row.key, name: row.name, share: row.values.support ?? null, standing: standingOf(row.values.support), registered: row.values.registered, members: row.values.members, calls: row.values.calls }));
-  const standing = [...STANDING, { id: 'nodata', label: 'Not enough survey data' }].map((band) => ({
-    id: band.id,
-    label: band.label,
-    lgas: lgas.filter((row) => row.standing === band.id).sort((a, b) => (b.share ?? 0) - (a.share ?? 0)).map((row) => ({ key: row.key, name: row.name, share: row.share })),
-  }));
 
   const members = pulse.members || {};
   const reference = pulse.reference || {};
   const center = pulse.contactCenter || {};
+  const registered = reference.registeredVoters?.value ?? null;
+  const pvcRate = reference.pvcRate ?? null;
 
-  const watch = [];
-  if (center.available && center.open) watch.push({ tone: 'risk', text: `${fmt(center.open)} call-center calls are still open${center.followUpRequested ? ` and ${fmt(center.followUpRequested)} people asked to be called back` : ''}.` });
-  const disputes = center.themes?.find((theme) => theme.id === 'party');
-  if (disputes) watch.push({ tone: 'risk', text: `${fmt(disputes.calls)} calls reported party unity or leadership disputes. Refer them to the LGA coordinators.` });
-  const blind = lgas.filter((row) => row.share == null && !row.calls).sort((a, b) => (b.registered || 0) - (a.registered || 0));
-  if (blind.length) watch.push({ tone: 'watch', text: `No survey and no calls yet in ${blind.slice(0, 4).map((row) => row.name).join(', ')}${blind.length > 4 ? ` and ${blind.length - 4} more` : ''} (${fmt(blind.reduce((sum, row) => sum + (row.registered || 0), 0))} registered voters).` });
-  const weakest = lgas.filter((row) => row.share != null && row.share < 0.2).sort((a, b) => a.share - b.share);
-  if (weakest.length) watch.push({ tone: 'watch', text: `Sen. Alli is weakest in ${weakest.slice(0, 3).map((row) => `${row.name} (${pct(row.share)})`).join(', ')}.` });
-  const noMembers = lgas.filter((row) => !row.members);
-  if (noMembers.length) watch.push({ tone: 'risk', text: `No APC confirmed members recorded in ${noMembers.slice(0, 4).map((row) => row.name).join(', ')}.` });
+  // The LGAs with the smallest share of polling units that have someone on the ground.
+  const coverage = members.available
+    ? (pulse.byLga || []).filter((row) => row.pollingUnits).map((row) => {
+      const share = (row.unitsCovered || 0) / row.pollingUnits;
+      return { key: row.lga, name: row.label, covered: row.unitsCovered || 0, units: row.pollingUnits, share, status: coverageStatus(share) };
+    }).sort((a, b) => a.share - b.share || b.units - a.units).slice(0, 10)
+    : [];
+
+  const standing = map.rows.map((row) => ({ name: row.name, share: row.values.support ?? null, named: row.detail?.survey?.named || 0 }));
+  const projects = projectsView(tenx, pulse.byLga || []);
+
+  // Five things to act on, always in the same order so the eye learns where to look.
+  const intelligence = [];
+  const gap = members.available ? members.pollingUnits - members.unitsCovered : null;
+  intelligence.push({
+    id: 'coverage', title: 'Weakest coverage',
+    tone: coverage[0]?.status === 'risk' ? 'risk' : 'watch',
+    text: coverage.length
+      ? `${list(coverage.slice(0, 3).map((row) => `${row.name} (${pct(row.share)})`))} have the smallest share of polling units with an APC member. ${fmt(gap)} polling units across Oyo have none yet.`
+      : 'Load the APC member list to see polling-unit coverage.',
+  });
+  const low = standing.filter((row) => row.share != null && row.share < 0.2 && row.named >= 30).sort((a, b) => a.share - b.share);
+  intelligence.push({
+    id: 'sentiment', title: 'Low sentiment',
+    tone: low.length ? 'risk' : 'good',
+    text: low.length
+      ? `Sen. Alli has under 20% of named choices in ${list([...low.slice(0, 3).map((row) => `${row.name} (${pct(row.share)})`), ...(low.length > 3 ? [`${low.length - 3} more LGAs`] : [])])}.`
+      : survey.available ? 'No LGA with enough answers has Sen. Alli under 20%.' : 'No voter survey has been loaded yet.',
+  });
+  intelligence.push({
+    id: 'projects', title: 'No project submitted or ongoing',
+    tone: projects ? 'watch' : 'none',
+    text: projects
+      ? `${fmt(Math.max(STATE_WARDS - (projects.wards || 0), 0))} of ${STATE_WARDS} wards have no 10x community project yet${projects.lgasWithout.length ? `, including every ward in ${list(projects.lgasWithout.slice(0, 3))}` : ''}.`
+      : tenx ? '10x has not shared any community projects yet.' : 'Waiting for 10x to connect; community projects come from there.',
+  });
+  intelligence.push({
+    id: 'media', title: 'On media',
+    tone: online ? 'risk' : 'none',
+    text: online
+      ? `Anger is ${online.emotion.us.anger}% of the feeling in Sen. Alli's online mentions, and negative mentions rose ${online.sentiment.change.negative}% on the week before${online.negativeTopic ? `, led by ${online.negativeTopic}` : ''} (${online.period.label}).`
+      : 'No online report has been loaded yet.',
+  });
+  const requests = (center.requests?.length ? center.requests : center.themes || []).filter((row) => row.id !== 'party').slice(0, 3);
+  intelligence.push({
+    id: 'callers', title: 'Call center',
+    tone: center.available && center.open ? 'risk' : 'watch',
+    text: center.available
+      ? `${fmt(center.open)} calls are still open${center.followUpRequested ? ` and ${fmt(center.followUpRequested)} callers asked to be called back` : ''}.${requests.length ? ` Callers raise ${list(requests.map((row) => `${row.label.toLowerCase()} (${fmt(row.calls)})`))}.` : ''}`
+      : 'No call-center report has been loaded yet.',
+  });
 
   return {
     place: pulse.filter?.label || 'All of Oyo',
     intention,
     numbers: {
-      registered: reference.registeredVoters?.value ?? null,
-      pvcRate: reference.pvcRate ?? null,
+      registered,
+      pvcRate,
+      pvcUncollected: registered != null && pvcRate != null ? Math.round(registered * (1 - pvcRate)) : null,
       members: members.available ? members.total : null,
       pollingUnitsReached: members.available ? members.unitsCovered : null,
       pollingUnits: members.available ? members.pollingUnits : pulse.register?.pollingUnits ?? null,
       lgasReached: members.available ? members.lgasWithMembers : null,
       lgas: pulse.register?.lgas ?? 33,
-      tenx: pulse.tenx?.available ? pulse.tenx.total : null,
-      tenxConnected: Boolean(pulse.tenx?.available),
     },
-    standing,
-    requests: {
-      survey: (survey.topIssues || []).slice(0, 4).map((row) => ({ name: row.name, share: row.share })),
-      callers: (center.requests?.length ? center.requests : center.themes || []).filter((row) => row.id !== 'party').slice(0, 4).map((row) => ({ name: row.label, calls: row.calls })),
-    },
-    platforms: (survey.platform || []).slice(0, 4).map((row) => ({ name: row.name, share: row.share })),
-    callCenter: center.available ? {
-      period: center.period,
-      calls: center.calls,
-      people: center.unique,
-      supporters: center.supporters,
-      notEstablished: center.notEstablished,
-      open: center.open,
-      followUp: center.followUpRequested,
-      droppedShare: center.droppedShare,
-      lgasCalled: center.lgasCalled,
-      wardsReached: center.wardsReached,
-    } : null,
-    watch,
+    tenx: tenx ? {
+      connected: true,
+      promoters: tenx.totals?.unitPromoters ?? 0,
+      target: promoterTarget,
+      pollingUnits: tenx.coverage?.pollingUnits ?? 0,
+      updatedAt: tenx.sourceGeneratedAt || null,
+    } : { connected: false, target: promoterTarget },
+    projects,
+    coverage,
+    intelligence,
+    online,
+    callCenter: center.available ? { period: center.period, calls: center.calls, open: center.open, followUp: center.followUpRequested } : null,
+    standing: [...STANDING, { id: 'nodata', label: 'Not enough survey data' }].map((band) => ({
+      id: band.id,
+      label: band.label,
+      lgas: standing.filter((row) => standingOf(row.share) === band.id).map((row) => row.name),
+    })),
   };
 }

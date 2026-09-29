@@ -1,0 +1,66 @@
+/* Resources: planning, resource tracking and reports. Same palette as the Overview. */
+.rs-bar { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.rs-views button { padding: 7px 16px !important; font-size: 13px !important; }
+.rs-title { margin: 0 auto 4px 0; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--pv-gold); }
+.rs-filters { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
+.rs-filters label { display: grid; gap: 2px; font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase; color: #8f7d86; }
+.rs-filters select, .rs-filters input, .rs-form input, .rs-form select, .rs-form textarea, .rs-report-form input { padding: 6px 8px; border: 1px solid #8a6d2e; border-radius: 7px; background: var(--pv-sunk); color: var(--pv-ink); font: inherit; font-size: 12.5px; text-transform: none; letter-spacing: 0; color-scheme: dark; }
+.rs-print, .rs-primary, .rs-downloads button { padding: 7px 14px; border: 1px solid #8a6d2e; border-radius: 8px; background: #4a1228; color: var(--pv-gold-bright); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.rs-print:hover, .rs-primary:hover, .rs-downloads button:hover { background: #5c1832; }
+.rs-print:focus-visible, .rs-primary:focus-visible, .rs-downloads button:focus-visible, .rs-link:focus-visible { outline: 2px solid var(--pv-gold); outline-offset: 2px; }
+.rs-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+.rs-plans { display: grid; grid-template-columns: minmax(250px, 0.9fr) minmax(0, 1.4fr) minmax(260px, 1fr); gap: 10px; align-items: start; }
+.rs-critical { border-top: 3px solid #9b6fd6; }
+.rs-critical ol { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 7px; }
+.rs-critical li { display: grid; gap: 3px; padding: 6px 9px; border-left: 3px solid var(--pv-rule); background: var(--pv-sunk); }
+.rs-critical li.risk { border-left-color: #d9493a; } .rs-critical li.watch { border-left-color: #f2c14e; } .rs-critical li.good { border-left-color: #3fa34d; }
+.rs-critical p { margin: 0; font-size: 12px; line-height: 1.45; }
+.rs-table-wrap { overflow-x: auto; }
+.rs-table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.rs-table th { padding: 4px 8px 6px 0; text-align: left; font-size: 10.5px; font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase; color: var(--pv-muted); }
+.rs-table td { padding: 4px 8px 4px 0; border-top: 1px solid #36111f; }
+.rs-table .num { text-align: right; }
+.rs-table td.num b { color: var(--pv-gold-bright); }
+.rs-table .rs-module th { padding-top: 10px; font-size: 12px; letter-spacing: 0.04em; color: var(--pv-gold); border-top: 0; }
+.rs-basis { color: var(--pv-muted); font-size: 11.5px; }
+.rs-list-head { display: flex !important; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.rs-list ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.rs-list li { display: grid; grid-template-columns: 78px minmax(0, 1fr) auto; gap: 8px; align-items: start; padding: 6px 8px; border-radius: 8px; background: var(--pv-sunk); font-size: 12.5px; }
+.rs-list time { color: var(--pv-gold-bright); font-variant-numeric: tabular-nums; }
+.rs-list li div { display: grid; gap: 1px; min-width: 0; }
+.rs-list li small { color: var(--pv-muted); font-size: 11.5px; }
+.rs-list li p { margin: 2px 0 0; color: var(--pv-muted); font-size: 11.5px; overflow-wrap: anywhere; }
+.rs-link { padding: 0; border: 0; background: none; color: #ff9b8e; font: inherit; font-size: 11.5px; cursor: pointer; }
+.rs-form { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; padding: 8px; border: 1px dashed #8a6d2e; border-radius: 8px; }
+.rs-form label { display: grid; gap: 3px; font-size: 11.5px; color: var(--pv-muted); }
+.rs-wide { grid-column: 1 / -1; }
+.rs-error { margin: 0; color: #ff9b8e; font-size: 12px; }
+
+.rs-reports { display: grid; grid-template-columns: minmax(260px, 0.8fr) minmax(0, 2.2fr); gap: 10px; align-items: start; }
+.rs-report-form label { display: grid; gap: 3px; font-size: 11.5px; color: var(--pv-muted); }
+.rs-downloads { display: grid; gap: 6px; margin-top: 4px; }
+.rs-downloads button { text-align: left; }
+.rs-preview { background: #f7f2f4 !important; color: #1f1116; border-color: #d9c9cf !important; }
+.rs-preview header p { color: #6b5a60 !important; }
+.rs-preview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.rs-preview article { padding: 8px 10px; border: 1px solid #e6dde0; border-radius: 8px; background: #fff; }
+.rs-preview h4 { margin: 0 0 4px; font-size: 12.5px; color: #7a1f3d; }
+.rs-preview h4 small { font-weight: 400; color: #6b5a60; }
+.rs-preview table { width: 100%; border-collapse: collapse; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.rs-preview th, .rs-preview td { padding: 2px 4px 2px 0; border-bottom: 1px solid #f0e8eb; text-align: left; }
+.rs-preview ul { margin: 4px 0 0; padding-left: 16px; font-size: 11.5px; color: #3a2a30; }
+.rs-election summary { cursor: pointer; font-weight: 600; color: var(--pv-gold-bright); }
+
+@media (max-width: 1200px) { .rs-plans { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .rs-critical { grid-column: 1 / -1; } }
+@media (max-width: 800px) { .rs-plans, .rs-reports, .rs-kpis { grid-template-columns: minmax(0, 1fr); } }
+
+/* Print: only the Resources page, on white. */
+@media print {
+  body * { visibility: hidden !important; }
+  .rs, .rs * { visibility: visible !important; }
+  .rs { position: absolute; left: 0; top: 0; width: 100%; height: auto !important; overflow: visible !important; color: #1f1116; }
+  .rs .pv-card, .rs .pv-kpi { background: #fff !important; border-color: #ccc !important; color: #1f1116 !important; }
+  .rs-filters, .rs-views, .rs-downloads, .rs-primary, .rs-link, .rs-election { display: none !important; }
+}
+.rs-preview h3 { color: #1f1116; }

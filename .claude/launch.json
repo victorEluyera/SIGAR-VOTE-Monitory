@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev:client"],
       "port": 5173
+    },
+    {
+      "name": "sigar-vote-api-local",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["--env-file=C:/Users/User/AppData/Local/Temp/claude/C--Users-User-Documents-sigar-vote/1bc2b563-a326-4a54-98ac-20e3c065235e/scratchpad/local-api.env", "server/index.js"],
+      "port": 5000
     }
   ]
 }

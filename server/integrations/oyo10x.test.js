@@ -20,9 +20,11 @@ const sample = () => ({
     { name: 'Test Split-LGA Seat (delete me)', office: 'House of Assembly', nominees: { total: 99, verified: 99 }, reports_filed: 99 },
   ],
   projects: {
-    total: 2,
+    total: 4,
     rows: [
-      { title: 'Borehole', status: 'promised', candidate: { name: 'Oyewole Abiola O.' }, sites: [{ lat: 7.4, lng: 3.9, label: 'x' }] },
+      { title: 'Borehole', status: 'promised', lga: 'Akinyele', ward: 'Ojo-Emo/Moniya', candidate: { name: 'Oyewole Abiola O.' }, sites: [{ lat: 7.4, lng: 3.9, label: 'x' }] },
+      { title: 'Road', status: 'In progress', lga: 'Akinyele', ward: 'OJO-EMO / MONIYA', candidate: { name: 'Oyewole Abiola O.' } },
+      { title: 'Clinic', status: 'completed', lga: 'Iseyin', ward: 'Ado', candidate: { name: 'Oyewole Abiola O.' } },
       { title: 'Data', status: 'promised', candidate: { name: 'Test Split-LGA Seat (delete me)' } },
     ],
   },
@@ -47,8 +49,16 @@ test("oyo10x's own test records are excluded from every figure", () => {
   assert.equal(clean.candidates.total, 2, 'the "(delete me)" candidate must not be counted');
   assert.equal(clean.candidates.nomineesTotal, 14);
   assert.equal(clean.candidates.reportsFiled, 2);
-  assert.equal(clean.projects.total, 1, 'the test project must not be counted');
+  assert.equal(clean.projects.total, 3, 'the test project must not be counted');
   assert.equal(clean.projects.testRecordsExcluded, 1);
+});
+
+test('projects fold into four stages and count the wards and LGAs they reach', () => {
+  const { projects } = sanitizeOyo10x(sample());
+  assert.deepEqual(projects.stages, { submitted: 1, notStarted: 0, ongoing: 1, completed: 1, other: 0 });
+  assert.equal(projects.wards, 2, 'the same ward spelt two ways counts once');
+  assert.deepEqual(projects.byLga, [{ name: 'Akinyele', projects: 2 }, { name: 'Iseyin', projects: 1 }]);
+  assert.equal(JSON.stringify(projects).includes('Oyewole'), false, 'candidate names stay out');
 });
 
 test('malformed or negative figures read as zero rather than corrupting totals', () => {

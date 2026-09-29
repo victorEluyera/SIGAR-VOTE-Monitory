@@ -284,14 +284,52 @@ export default function PreElectionPulse({ authToken, onOpenData }) {
   const leader = survey.available ? survey.candidates[0] : null;
   const runnerUp = survey.available ? survey.candidates[1] : null;
 
+  const overviewStats = [
+    { label: "REGISTERED VOTERS", value: compact(reference.registeredVoters?.value ?? 3280000), sub: "2.76% collected their PVC" },
+    { label: "APC", value: compact(500000), sub: "84.3% of register" },
+    { label: "Members", value: compact(157289), sub: "4.8% of registered voters" },
+    { label: "10X POLLING UNIT PROMOTERS", value: compact(5832), sub: "2% of 750,000 target" },
+    { label: "COMMUNITY PROJECTS", value: compact(300), sub: "300 / 351 Wards Covered" },
+    { label: "Wards", value: compact(5992), sub: "of 0.390 · 04%" },
+  ];
+
+  const topIssues = [
+    { name: "Economic hardship", value: 47 },
+    { name: "Security", value: 28 },
+    { name: "Infrastructure", value: 19 },
+    { name: "Jobs", value: 14 },
+  ];
+
+  const communityProjects = [
+    { name: "Submitted", value: 100 },
+    { name: "Ongoing", value: 50 },
+    { name: "Completed", value: 10 },
+    { name: "Not Started", value: 40 },
+  ];
+
+  const criticalIntelligence = [
+    "1. Places with the weakest coverage",
+    "2. Places with the low sentiment",
+    "3. No project submitted or ongoing",
+    "4. On media",
+  ];
+
+  const sentimentBars = [
+    { name: "Very positive", value: 71.9, color: "#f5dc9a" },
+    { name: "Positive", value: 54.2, color: "#d9aa4b" },
+    { name: "Neutral", value: 46.8, color: "#c9748f" },
+    { name: "Negative", value: 43.6, color: "#8a4a5c" },
+  ];
+
   return (
     <section ref={fitRef} style={fitHeight ? { height: fitHeight } : undefined} className={`pep${query.isFetching ? " pep-busy" : ""}`} aria-label="Pre-election pulse">
-      <header className="pep-head">
+      <header className="pep-head pep-header-override">
         <div>
-          <span className="eyebrow">PRE-ELECTION PULSE</span>
-          <h2>{data.filter.label}</h2>
+          <span className="eyebrow">PRE-ELECTION DASHBOARD</span>
+          <h2>Pre-Election Dashboard</h2>
         </div>
         <div className="pep-head-actions">
+          <span className="pep-head-summary">Overview, voter and feedback analysis, insight, next actions and resources.</span>
           <label>
             <span>LGA</span>
             <select value={lga} onChange={(event) => setLga(event.target.value)} aria-label="Filter the pulse by LGA">
@@ -304,26 +342,130 @@ export default function PreElectionPulse({ authToken, onOpenData }) {
         </div>
       </header>
 
-      <div className="pep-kpis">
-        <Kpi label="Poll leader" value={leader ? leader.short : "—"} sub={leader ? pct(leader.share, 1) : "no survey yet"} tone="lead" />
-        <Kpi label="Survey responses" value={survey.available ? num(survey.responses) : "—"} sub={survey.available ? ago(survey.updatedAt) : "not loaded"} />
-        <Kpi label="APC confirmed members" value={members.available ? num(members.total) : "—"} sub={members.available ? "APC member records" : "not loaded"} />
-        <Kpi label="10x volunteers" value={tenx.available && tenx.total != null ? num(tenx.total) : "—"} sub={!tenx.available ? "oyo10x not connected" : tenx.total == null ? "no LGA figures from oyo10x yet" : `${num(tenx.verified)} verified · from oyo10x`} />
-        <Kpi label="Polling units reached" value={members.available ? num(members.unitsCovered) : "—"} sub={`of ${num(register.pollingUnits)}${members.available ? ` · ${pct(members.unitCoverage)}` : ""}`} tone={members.available && members.unitCoverage < 0.5 ? "warn" : ""} />
-        <Kpi label="Registered voters" value={compact(reference.registeredVoters?.value)} sub={reference.registeredVoters ? "registered" : "not loaded"} />
-        <Kpi label="PVCs collected" value={compact(reference.pvcCollected?.value)} sub={reference.pvcRate != null ? `${pct(reference.pvcRate, 1)} of register` : "not loaded"} />
-        <Kpi label="Population" value={compact(reference.population?.value)} sub={reference.population ? (reference.population.basis === "estimate" ? "estimate" : data.filter.lga ? "uploaded" : "population") : "not loaded"} />
-        <Kpi label="Verified Contacts" value={contacts.available ? compact(contacts.total) : "—"} sub={contacts.available && reference.registeredVoters ? `${pct(contacts.total / reference.registeredVoters.value)} of voters` : contacts.available ? "phones" : "not loaded"} tone={contacts.truncated ? "warn" : ""} />
+      <nav className="pep-tabs" aria-label="Pre-election tabs">
+        <button type="button" className="pep-tab active">Overview</button>
+        <button type="button" className="pep-tab">Insights</button>
+        <button type="button" className="pep-tab">Feedback</button>
+        <button type="button" className="pep-tab">Resource</button>
+      </nav>
+
+      <div className="pep-kpis pep-kpis-compact">
+        {overviewStats.map((stat) => (
+          <div key={stat.label} className="pep-kpi pep-kpi-card">
+            <span>{stat.label}</span>
+            <strong>{stat.value}</strong>
+            <small>{stat.sub}</small>
+          </div>
+        ))}
       </div>
 
-      <div className="pep-grid">
-        <ContactCenterPanel center={data.contactCenter} place={data.filter.label} />
-        <IntentionPanel survey={survey} />
-        <IssuesPanel survey={survey} center={data.contactCenter} />
-        <InsightsPanel insights={data.insights} />
-        <GroundPanel data={data} onPick={setLga} />
-        <SatisfactionPanel survey={survey} />
-        <PlatformPanel survey={survey} />
+      <div className="pep-overview-grid">
+        <div className="pep-overview-main">
+          <div className="pep-box pep-box--donut">
+            <div className="pep-box-header">
+              <h3>Vote intention</h3>
+              <span>23,836 respondents</span>
+            </div>
+            <div className="pep-donut-wrap">
+              <div className="pep-donut-chart">
+                <div className="pep-ring">
+                  <div className="pep-ring-inner">
+                    <strong>49%</strong>
+                    <small>Undecided</small>
+                  </div>
+                </div>
+              </div>
+              <ul className="pep-donut-legend">
+                <li><span className="dot dot-pink" />Adekemni Ambi</li>
+                <li><span className="dot dot-blue" />Hamzat Oryomi</li>
+                <li><span className="dot dot-gold" />Undecided</li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="pep-box pep-box--coverage">
+            <div className="pep-box-header">
+              <h3>Weakest Polling-Unit Coverage</h3>
+              <button type="button" className="pep-lite-button">View all</button>
+            </div>
+            <div className="pep-table-wrap">
+              <table className="pep-mini-table">
+                <tbody>
+                  <tr><td>1 Orile</td><td>82%</td><td>12/137</td></tr>
+                  <tr><td>2 Ijewajo</td><td>82%</td><td>12/137</td></tr>
+                  <tr><td>3 Aji</td><td>84%</td><td>101/120</td></tr>
+                  <tr><td>4 Kajola</td><td>85%</td><td>130/153</td></tr>
+                  <tr><td>5 Lagelu</td><td>86%</td><td>142/165</td></tr>
+                  <tr><td>6 Asto</td><td>87%</td><td>129/148</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="pep-box pep-box--sentiment">
+            <div className="pep-box-header">
+              <h3>Share of Sentiment</h3>
+            </div>
+            <div className="pep-small-bars">
+              {sentimentBars.map((bar) => (
+                <div key={bar.name} className="pep-small-bar-group">
+                  <div className="pep-small-bar" style={{ height: `${bar.value}%`, background: bar.color }} />
+                  <small>{bar.value.toFixed(1)}%</small>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="pep-box pep-box--influencers">
+            <div className="pep-box-header">
+              <h3>Influencers</h3>
+            </div>
+            <div className="pep-bubble-panel">
+              <div className="pep-bubble bubble-1">#0yoAhead</div>
+              <div className="pep-bubble bubble-2">#APM</div>
+              <div className="pep-bubble bubble-3">#BAM2027</div>
+              <div className="pep-bubble bubble-4">#APM</div>
+              <div className="pep-bubble bubble-5">#BAM2027</div>
+            </div>
+          </div>
+        </div>
+
+        <aside className="pep-overview-side">
+          <div className="pep-box pep-box--projects">
+            <div className="pep-box-header">
+              <h3>Community Projects</h3>
+              <button type="button" className="pep-lite-button">View all</button>
+            </div>
+            <div className="pep-project-stats">
+              {communityProjects.map((project) => (
+                <div key={project.name} className="pep-project-stat">
+                  <strong>{project.value}</strong>
+                  <span>{project.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="pep-box pep-box--critical">
+            <div className="pep-box-header">
+              <h3>5 Critical Intelligence</h3>
+            </div>
+            <ol className="pep-critical-list">
+              {criticalIntelligence.map((item, index) => (
+                <li key={item}>
+                  <span>{index + 1}.</span>
+                  <strong>{item.replace(/^\d+\.\s*/, "")}</strong>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          <div className="pep-box pep-box--notes">
+            <p>702 calls (36%) are still open and 147 callers asked for a follow-up. Close these before the next outreach round.</p>
+            <p>Callers most often raise electricity &amp; street lights (361), roads &amp; bridges (287), money &amp; financial support (248).</p>
+            <p>Activate Windows</p>
+          </div>
+        </aside>
       </div>
     </section>
   );

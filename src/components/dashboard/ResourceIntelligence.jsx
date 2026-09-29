@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../api/client.js';
 import { getRegistrationLocationOptions } from '../../../shared/electionData.js';
@@ -93,8 +93,10 @@ function DeploymentRow({ deployment, authToken, onDone }) {
   );
 }
 
-export default function ResourceIntelligence({ authToken }) {
-  const [scope, setScope] = useState({ lga: '', ward: '' });
+/** `lga`, when given, comes from the page's own LGA filter (the Resources tab) and hides this one. */
+export default function ResourceIntelligence({ authToken, lga: pageLga, onChanged }) {
+  const [scope, setScope] = useState({ lga: pageLga || '', ward: '' });
+  useEffect(() => { if (pageLga !== undefined) setScope({ lga: pageLga, ward: '' }); }, [pageLga]);
   const [form, setForm] = useState({ action: 'requirement', resourceType: 'Radio', quantity: '', unit: 'units', reservedFor: '', reason: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -106,7 +108,7 @@ export default function ResourceIntelligence({ authToken }) {
   const recordsKey = ['resource-records', authToken, scope.lga, scope.ward];
   const records = useQuery({ queryKey: recordsKey, queryFn: ({ signal }) => apiRequest(`/area-operations/resources/records${scopeQuery(scope)}`, authToken, { signal }) });
 
-  const refresh = () => { client.invalidateQueries({ queryKey: key }); client.invalidateQueries({ queryKey: recordsKey }); };
+  const refresh = () => { client.invalidateQueries({ queryKey: key }); client.invalidateQueries({ queryKey: recordsKey }); onChanged?.(); };
 
   const changeScope = (event) => setScope((previous) => ({ ...previous, [event.target.name]: event.target.value, ...(event.target.name === 'lga' ? { ward: '' } : {}) }));
   const changeForm = (event) => setForm((previous) => ({ ...previous, [event.target.name]: event.target.value }));
@@ -136,7 +138,7 @@ export default function ResourceIntelligence({ authToken }) {
       <header><span className="eyebrow">RESOURCE INTELLIGENCE</span><p>Requirement → allocation → deployment → adequacy, tracked by geography.</p></header>
 
       <div className="area-operation-form ri-scope">
-        <label>Local government<select name="lga" value={scope.lga} onChange={changeScope}><option value="">All of Oyo State</option>{getRegistrationLocationOptions('Oyo').lgas.map((name) => <option key={name}>{name}</option>)}</select></label>
+        {pageLga === undefined && <label>Local government<select name="lga" value={scope.lga} onChange={changeScope}><option value="">All of Oyo State</option>{getRegistrationLocationOptions('Oyo').lgas.map((name) => <option key={name}>{name}</option>)}</select></label>}
         <label>Ward<select name="ward" value={scope.ward} onChange={changeScope} disabled={!scope.lga}><option value="">All wards</option>{options.wards.map((name) => <option key={name}>{name}</option>)}</select></label>
       </div>
 

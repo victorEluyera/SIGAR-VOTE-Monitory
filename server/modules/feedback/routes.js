@@ -5,6 +5,8 @@ import { withBaseline } from '../pre-election/baseline.js';
 import { oyoGeo } from '../pre-election/geo.js';
 import { matchLga } from '../pre-election/lga.js';
 import { buildFeedbackAnalysis } from './analysis.js';
+import { buildChannels } from './channels.js';
+import { onlineReport } from '../pre-election/overview.js';
 import { formDefinition, validateSubmission } from './form.js';
 
 const CAN_VIEW = ['Stakeholder', 'Admin', 'Super Admin'];
@@ -127,7 +129,8 @@ export function registerFeedbackRoutes({ app, auth, rateLimit, asyncRoute, store
     const key = `${responses.length}|${responses.at(-1)?.id || ''}|${links.length}|${projects.length}|${survey?.id || ''}|${centerSet?.id || ''}|${snapshot?.fetchedAt || ''}|${lga}|${canManage}`;
     if (!cache.has(key)) {
       if (cache.size > 100) cache.clear();
-      cache.set(key, buildFeedbackAnalysis({ survey, responses, links, projects, centerSet, tenx: snapshot?.data || null, lga, agents }));
+      const analysis = buildFeedbackAnalysis({ survey, responses, links, projects, centerSet, tenx: snapshot?.data || null, lga, agents });
+      cache.set(key, { ...analysis, channels: buildChannels({ survey, centerSet, online: onlineReport(), analysis, lga }) });
     }
     res.set('Cache-Control', 'private, max-age=30');
     res.json({ ...cache.get(key), canManage });
