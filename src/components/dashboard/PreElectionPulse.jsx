@@ -281,6 +281,7 @@ export default function PreElectionPulse({ authToken, onOpenData }) {
   const data = query.data;
   const { survey, members, contacts, reference, register } = data;
   const tenx = data.tenx || { available: false };
+  const projectsComplete = tenx.available && tenx.projects && !tenx.projects.partial;
   const leader = survey.available ? survey.candidates[0] : null;
   const runnerUp = survey.available ? survey.candidates[1] : null;
 
@@ -288,8 +289,8 @@ export default function PreElectionPulse({ authToken, onOpenData }) {
     { label: "REGISTERED VOTERS", value: compact(reference.registeredVoters?.value ?? 3280000), sub: "2.76% collected their PVC" },
     { label: "APC", value: compact(500000), sub: "84.3% of register" },
     { label: "Members", value: compact(157289), sub: "4.8% of registered voters" },
-    { label: "10X POLLING UNIT PROMOTERS", value: compact(5832), sub: "2% of 750,000 target" },
-    { label: "COMMUNITY PROJECTS", value: compact(300), sub: "300 / 351 Wards Covered" },
+    { label: "10X POLLING UNIT PROMOTERS", value: tenx.available ? compact(tenx.unitPromoters) : "—", sub: tenx.available ? `${pct((tenx.unitPromoters || 0) / 750000)} of 750,000 target` : "10X not connected" },
+    { label: "COMMUNITY PROJECTS", value: projectsComplete ? compact(tenx.projects.total) : "—", sub: !tenx.available ? "10X not connected" : projectsComplete ? `${num(tenx.projects.wards)} / 351 wards covered` : "10X project data incomplete" },
     { label: "Wards", value: compact(5992), sub: "of 0.390 · 04%" },
   ];
 
@@ -301,10 +302,10 @@ export default function PreElectionPulse({ authToken, onOpenData }) {
   ];
 
   const communityProjects = [
-    { name: "Submitted", value: 100 },
-    { name: "Ongoing", value: 50 },
-    { name: "Completed", value: 10 },
-    { name: "Not Started", value: 40 },
+    { name: "Submitted", value: projectsComplete ? tenx.projects.stages?.submitted : null },
+    { name: "Ongoing", value: projectsComplete ? tenx.projects.stages?.ongoing : null },
+    { name: "Completed", value: projectsComplete ? tenx.projects.stages?.completed : null },
+    { name: "Not Started", value: projectsComplete ? tenx.projects.stages?.notStarted : null },
   ];
 
   const criticalIntelligence = [
@@ -439,7 +440,7 @@ export default function PreElectionPulse({ authToken, onOpenData }) {
             <div className="pep-project-stats">
               {communityProjects.map((project) => (
                 <div key={project.name} className="pep-project-stat">
-                  <strong>{project.value}</strong>
+                  <strong>{project.value == null ? "—" : compact(project.value)}</strong>
                   <span>{project.name}</span>
                 </div>
               ))}
