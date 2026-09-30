@@ -111,7 +111,7 @@ function scaleFor(key, meta, rows) {
   const present = (colors, labels) => [...new Set(rows.map((row) => row.values[key]).filter(Boolean))].map((id) => ({ color: colors[id] || "#8f7d86", label: labels(id) }));
   if (key === "needs") return { color: (value) => NEED_COLORS[value] || "#8f7d86", rate: null, legend: present(NEED_COLORS, needLabel) };
   if (key === "occupation") return { color: (value) => OCCUPATION_COLORS[value] || "#8f7d86", rate: null, legend: present(OCCUPATION_COLORS, (id) => OCCUPATION_LABELS[id] || id) };
-  const show = (value) => formatValue(key, value, meta);
+  const show = (value) => formatValue(key, meta?.format === "share" || key === "priority" || key === "changeGov" || key === "changePres" ? Math.round(value * 100) / 100 : Math.round(value), meta);
   const bands = (palette, edges, words) => palette.map((color, i) => ({
     color,
     label: `${words ? `${words[i]} · ` : ""}${i === 0 ? `under ${show(edges[0])}` : i === palette.length - 1 ? `${show(edges[i - 1])}+` : `${show(edges[i - 1])}–${show(edges[i])}`}`,
@@ -608,7 +608,6 @@ export default function SentimentMapTab({ authToken, initialLga = null }) {
         </div>
 
         <aside className="smp-side">
-          <AlertsCard key={`${level}|${lga?.key || ""}|${ward?.number || ""}`} alerts={data.alerts} />
           {card ? <AreaCard area={card} data={data} selected={selected} measure={measure} onOpen={level !== "pu" && card !== data.context ? () => drill(card) : null} />
             : <section className="smp-card"><header><div><h3>{level === "lga" ? "All 33 LGAs" : data.ward?.name}</h3><p>Click an area to see its figures</p></div></header>
               <dl>
@@ -617,6 +616,7 @@ export default function SentimentMapTab({ authToken, initialLga = null }) {
               </dl>
               {level === "pu" && data.ward?.register && selected.some((key) => REGISTER_KEYS.includes(key)) && <RegisterBlock register={data.ward.register} />}
               </section>}
+          <AlertsCard key={`${level}|${lga?.key || ""}|${ward?.number || ""}`} alerts={data.alerts} />
           <section className="smp-card">
             <h3>Where to act</h3>
             <p className="smp-sub">{level === "pu" ? "Units that most need a member" : "Ranked by the priority score"}</p>

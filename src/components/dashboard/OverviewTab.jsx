@@ -213,12 +213,12 @@ export default function OverviewTab({ authToken, onOpenLga }) {
   const stageTotal = projects?.stages ? STAGES.reduce((sum, stage) => sum + (projects.stages[stage.id] || 0), 0) : 0;
 
   return (
-    <section ref={fitRef} style={fitHeight ? { height: fitHeight } : undefined} className="pv" aria-label="Overview">
+    <section ref={fitRef} style={fitHeight ? { height: fitHeight } : undefined} className="pv pv-overview" aria-label="Overview">
       <div className="pv-kpis pv-kpis-6">
-        <Kpi label="Registered voters" value={compact(numbers.registered)} note={numbers.pvcRate != null ? `${pct(numbers.pvcRate, 1)} collected their PVC` : "voter register"} />
-        <Kpi label="PVCs uncollected" value={num(numbers.pvcUncollected)} note={numbers.pvcRate != null ? `${pct(1 - numbers.pvcRate, 1)} of the register` : ""} />
+        <Kpi label="Registered voters" value={compact(numbers.registered)} note={numbers.pvcRate != null ? `${compact(numbers.registered - numbers.pvcUncollected)} collected their PVC (${pct(numbers.pvcRate, 1)})` : "voter register"} />
+        <Kpi label="PVC not collected" value={num(numbers.pvcUncollected)} note={numbers.pvcRate != null ? `${pct(1 - numbers.pvcRate, 1)} of the register` : ""} />
         <Kpi lead label="APC members" value={num(numbers.members)} note={numbers.members != null && numbers.registered ? `${pct(numbers.members / numbers.registered, 1)} of registered voters` : ""} />
-        <Kpi label="Polling units reached" value={num(numbers.pollingUnitsReached)} note={numbers.pollingUnitsReached != null ? `of ${num(numbers.pollingUnits)} · ${pct(numbers.pollingUnitsReached / numbers.pollingUnits)} · ${numbers.lgasReached} LGAs` : ""} />
+        <Kpi label="Polling units reached" value={num(numbers.pollingUnitsReached)} note={numbers.pollingUnitsReached != null ? `${num(Math.max(numbers.pollingUnits - numbers.pollingUnitsReached, 0))} polling units remaining · of ${num(numbers.pollingUnits)}` : ""} />
         <Kpi label="10x PU promoters" value={tenx.connected ? num(tenx.promoters) : "—"}
           note={tenx.connected ? `${pct(tenx.promoters / tenx.target, 1)} of ${compact(tenx.target)} target · in ${num(tenx.pollingUnits)} PUs` : "10x not connected yet"}
           meter={tenx.connected ? tenx.promoters / tenx.target : null} />
@@ -237,7 +237,6 @@ export default function OverviewTab({ authToken, onOpenLga }) {
                   {intention.split.map((item) => <li key={item.id}><span><i style={{ background: POLL_COLORS[item.id] }} />{item.label}</span><b>{pct(item.share)}</b></li>)}
                 </ul>
               </div>
-              <div className="pv-callout"><strong>{pct(intention.share, 1)}</strong><small>Sen. Alli among people who named a candidate ({num(intention.votes)} of {num(intention.named)})</small></div>
             </>
           ) : <p className="pv-empty">Load the survey in Manage data.</p>}
         </Card>

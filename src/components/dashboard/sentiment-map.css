@@ -180,3 +180,7 @@
 .smp-unplaced button { padding: 6px 6px; text-align: center; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .smp-units button.picked { outline: 2px solid #fff; outline-offset: -2px; }
 @media (max-width: 900px) { .smp-main { grid-template-columns: 1fr; } }
+
+.smp-legend { max-width: 185px; padding: 7px 9px; font-size: 10px; }
+.smp-legend span { font-size: 10px; line-height: 1.25; }
+.smp-legend i { width: 8px; height: 8px; border-radius: 50%; }

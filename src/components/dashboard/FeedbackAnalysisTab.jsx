@@ -309,7 +309,7 @@ export default function FeedbackAnalysisTab({ authToken }) {
   });
   const data = query.data;
   if (query.isError && !data) return <section className="pv" ref={fitRef}><p className="pv-empty">{query.error.message}</p></section>;
-  if (!data) return <section className="pv" ref={fitRef}><p className="pv-empty">Loading the feedback analysis…</p></section>;
+  if (!data) return <section className="pv" ref={fitRef}><p className="pv-empty">Loading sentiment…</p></section>;
 
   const s = data.sources;
   const allLgas = data.byLga.slice().sort((a, b) => a.name.localeCompare(b.name));
@@ -317,7 +317,7 @@ export default function FeedbackAnalysisTab({ authToken }) {
   const { callCenter, field, online, critical } = data.channels;
   const toggle = (id) => setOpen((current) => (current === id ? null : id));
   return (
-    <section ref={fitRef} style={fitHeight ? { height: fitHeight } : undefined} className={`pv${query.isFetching ? " pv-busy" : ""}`} aria-label="Feedback analysis">
+    <section ref={fitRef} style={fitHeight ? { height: fitHeight } : undefined} className={`pv${query.isFetching ? " pv-busy" : ""}`} aria-label="Sentiment">
       <div className="pv-bar">
         <p className="pv-headline-title" style={{ fontSize: 18 }}>What people are telling us · {data.place}</p>
         <label className="fb-filter">LGA
@@ -328,12 +328,10 @@ export default function FeedbackAnalysisTab({ authToken }) {
         </label>
       </div>
 
-      <div className="pv-kpis">
-        <div className="pv-kpi"><span>Field survey</span><strong>{num(s.field.responses)}</strong><small>answers in the field survey file</small></div>
-        <div className="pv-kpi"><span>Feedback form</span><strong>{num(s.form.responses)}</strong><small>{num(s.form.byAgents)} by {num(s.form.agents)} agent{s.form.agents === 1 ? "" : "s"} · {num(s.form.public)} public</small></div>
-        <div className="pv-kpi"><span>Call center</span><strong>{num(s.callCenter.calls)}</strong><small>{s.callCenter.available ? `calls${s.callCenter.period ? ` · ${s.callCenter.period}` : ""}` : "no report loaded"}</small></div>
-        <div className="pv-kpi"><span>10x field work</span><strong>{field.available ? num(field.responses) : "—"}</strong><small>{field.available ? `field survey answers${field.collectors ? ` · ${field.collectors} collectors` : ""}` : "no field survey yet"}</small></div>
-        <div className="pv-kpi pv-kpi-lead"><span>Sen. Alli, first choice</span><strong>{pct(data.intention.field.share)}</strong><small>field survey{data.intention.link.named >= 10 ? ` · ${pct(data.intention.link.share)} on the form` : ""}</small></div>
+      <div className="pv-kpis fb-sentiment-kpis">
+        <div className="pv-kpi"><span>Contact center</span><strong>{num(s.callCenter.calls)}</strong><small>{s.callCenter.available ? s.callCenter.period || data.place : "no report loaded"}</small></div>
+        <div className="pv-kpi"><span>10x field work</span><strong>{field.available ? num(field.responses) : "—"}</strong><small>field responses</small></div>
+        <div className="pv-kpi"><span>Online sentiment</span><strong>{online.available ? compact(online.totals.mentions.us) : "—"}</strong><small>{online.available ? online.period.label : "no report loaded"}</small></div>
       </div>
 
       <div className="fb-hub">
@@ -349,7 +347,7 @@ export default function FeedbackAnalysisTab({ authToken }) {
                 bars={callCenter.scope === "state" ? callCenter.perDay.map((row) => ({ label: dayLabel(row.date), value: row.calls, display: num(row.calls) })) : callCenter.detail.themes.slice(0, 5).map((row) => ({ label: row.label.split(" ")[0], value: row.calls, display: num(row.calls) }))} />
             ) : <div className="fb-channel fb-channel-empty"><b>Contact center</b><small>No call-center report loaded. Upload it in Tools → Manage Data.</small></div>}
             {field.available ? (
-              <ChannelCard title="10x field work" sub={`Field survey${field.collectors ? ` · ${field.collectors} collectors` : ""} · top issues`} accent="#d9aa4b" open={open === "field"} onToggle={() => toggle("field")}
+              <ChannelCard title="10x field work" sub={`Field responses${field.collectors ? ` · ${field.collectors} collectors` : ""} · top issues`} accent="#d9aa4b" open={open === "field"} onToggle={() => toggle("field")}
                 stats={[
                   { label: "Answers", value: num(field.responses), note: data.place },
                   { label: "Sen. Alli", value: pct(field.focusShare), note: "of named choices" },
@@ -358,7 +356,7 @@ export default function FeedbackAnalysisTab({ authToken }) {
                 bars={field.topIssues.map((row) => ({ label: sentenceCase(row.name).split(/[ &/]/)[0], value: row.share, display: pct(row.share) }))} />
             ) : <div className="fb-channel fb-channel-empty"><b>10x field work</b><small>No field survey loaded yet.</small></div>}
             {online.available ? (
-              <ChannelCard title="Online" sub={`${online.period.label} · state-wide · emotion`} accent="#b061c9" open={open === "online"} onToggle={() => toggle("online")}
+              <ChannelCard title="Online sentiment" sub={`${online.period.label} · state-wide · emotion`} accent="#b061c9" open={open === "online"} onToggle={() => toggle("online")}
                 stats={[
                   { label: "Mentions", value: compact(online.totals.mentions.us), note: `${compact(online.totals.engagement.us)} engaged` },
                   { label: "Positive", value: `${online.sentiment.us.positive}%`, note: `${online.sentiment.us.neutral}% neutral` },
@@ -379,9 +377,9 @@ export default function FeedbackAnalysisTab({ authToken }) {
         </div>
 
         <aside className="pv-card fb-critical" aria-label="Critical intelligence">
-          <header><h3>Critical intelligence</h3><p>Situational analysis from the call center, 10x and online</p></header>
+          <header><h3>Critical intelligence</h3><p>{({ callers: "Contact center", field: "10x field work", online: "Online" })[open] || "All channels"} · findings and suggested actions</p></header>
           <ol>
-            {critical.map((item) => <li key={item.text} className={item.tone}><span className="fb-src">{item.source}</span><p>{item.text}</p></li>)}
+            {critical.filter((item) => !open || item.source === ({ callers: "Call center", field: "10x field work", online: "Online" })[open]).map((item) => <li key={item.text} className={item.tone}><span className="fb-src">{item.source}</span><p>{item.text}</p><p><b>Suggested action: </b>{item.solution}</p></li>)}
           </ol>
         </aside>
       </div>

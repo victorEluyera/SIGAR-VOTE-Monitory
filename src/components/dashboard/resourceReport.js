@@ -73,7 +73,7 @@ export function buildReport({ projectName, title, place, overview, feedback, res
       note: "State-wide",
       table: [
         ["Registered voters", num(n.registered)],
-        ["PVCs uncollected", num(n.pvcUncollected)],
+        ["PVC not collected", num(n.pvcUncollected)],
         ["APC members", num(n.members)],
         ["Polling units reached", `${num(n.pollingUnitsReached)} of ${num(n.pollingUnits)}`],
         ["10x PU promoters", overview.tenx?.connected ? num(overview.tenx.promoters) : "10x not connected"],

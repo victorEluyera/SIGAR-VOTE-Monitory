@@ -15,7 +15,7 @@ import ResourcesTab from "./ResourcesTab.jsx";
 const TABS = [
   { id: "overview", label: "Overview" },
   { id: "insight", label: "Insight" },
-  { id: "feedback", label: "Feedback" },
+  { id: "feedback", label: "Sentiment" },
   { id: "resources", label: "Resources", admin: true },
 ];
 

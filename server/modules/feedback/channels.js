@@ -132,7 +132,11 @@ function onlineChannel(online) {
 /** The few things to act on now, from all three channels, most serious first. */
 function critical({ callCenter, field, online }) {
   const out = [];
-  const add = (tone, source, text) => out.push({ tone, source, text });
+  const add = (tone, source, text) => out.push({ tone, source, text, solution: {
+    'Call center': 'Assign an owner to unresolved reports, track follow-ups, and refer service concerns to the responsible team.',
+    '10x field work': 'Validate the reported needs with additional responses and refer the leading service issues for review.',
+    Online: 'Review the original mentions, verify factual claims, correct inaccurate information, and track unresolved concerns in the next report.',
+  }[source] });
   if (callCenter.available && callCenter.scope === 'state') {
     if (callCenter.open) add('risk', 'Call center', `${fmt(callCenter.open)} calls (${pct(share(callCenter.open, callCenter.calls))}) are still open${callCenter.followUp ? ` and ${fmt(callCenter.followUp)} callers asked for a follow-up` : ''}. Close these before the next outreach round.`);
     const asks = (callCenter.detail.requests.length ? callCenter.detail.requests : callCenter.detail.themes).filter((row) => row.id !== 'party').slice(0, 3);
