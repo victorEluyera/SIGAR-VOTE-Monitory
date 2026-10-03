@@ -10,6 +10,7 @@ import { buildOverview, onlineReport } from './overview.js';
 import { buildVoterAnalysis, memberMatchKeys } from './voters.js';
 import { aiPrompt, buildFacts, checkAiPlan, HORIZONS, QUADRANTS, ruleActions, ruleBrief, STATUSES } from './actions.js';
 import { askModels } from './ai.js';
+import { oyo10xConnectionView } from '../../integrations/oyo10x.js';
 
 const CAN_VIEW = ['Stakeholder', 'Admin', 'Super Admin'];
 const CAN_UPLOAD = ['Admin', 'Super Admin'];
@@ -38,7 +39,7 @@ export function registerPreElectionRoutes({ app, auth, rateLimit, asyncRoute, st
   // when it is not connected or has not answered yet, which the views show as "not connected".
   const tenxSnapshot = async () => {
     const snapshot = oyo10x ? await oyo10x.snapshot() : null;
-    return { data: snapshot?.data || null, version: snapshot?.fetchedAt || snapshot?.status || 'none' };
+    return { data: snapshot?.data || null, connection: oyo10xConnectionView(snapshot), version: snapshot?.fetchedAt || snapshot?.status || 'none' };
   };
   const canView = (req, res) => {
     if (CAN_VIEW.includes(req.user?.role)) return true;
@@ -102,7 +103,7 @@ export function registerPreElectionRoutes({ app, auth, rateLimit, asyncRoute, st
       cache.set(key, buildOverview({ pulse, map, tenx: tenx.data, online: onlineReport() }));
     }
     res.set('Cache-Control', 'private, max-age=30');
-    res.json(cache.get(key));
+    res.json({ ...cache.get(key), tenxConnection: tenx.connection });
   }));
 
   app.get('/api/pre-election/voters', auth, rateLimit, asyncRoute(async (req, res) => {

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createOyo10xClient, sanitizeOyo10x } from './oyo10x.js';
+import { createOyo10xClient, sanitizeOyo10x, oyo10xConnectionView } from './oyo10x.js';
 
 const sample = () => ({
   generated_at: '2026-09-23T17:58:44.812Z',
@@ -96,6 +96,16 @@ test('not configured means no network call at all', async () => {
   const result = await client.snapshot();
   assert.equal(result.status, 'not-configured');
   assert.equal(calls, 0);
+});
+
+test('dashboard connection status distinguishes setup, access, endpoint and stale data', () => {
+  assert.match(oyo10xConnectionView(null).message, /OYO10X_API_KEY/);
+  assert.match(oyo10xConnectionView({ status: 'unavailable', error: 'oyo10x returned HTTP 401' }).message, /rejected API access/);
+  assert.match(oyo10xConnectionView({ status: 'unavailable', error: 'oyo10x returned HTTP 404' }).message, /endpoint was not found/);
+  const stale = oyo10xConnectionView({ status: 'stale', error: 'oyo10x did not respond in time', fetchedAt: '2026-10-03T09:00:00.000Z' });
+  assert.match(stale.message, /last successful figures/);
+  assert.equal(stale.fetchedAt, '2026-10-03T09:00:00.000Z');
+  assert.equal(oyo10xConnectionView({ status: 'unavailable', error: 'PRIVATE_SECRET' }).message.includes('PRIVATE_SECRET'), false);
 });
 
 test('responses are cached, so frequent dashboard refreshes do not reach oyo10x', async () => {

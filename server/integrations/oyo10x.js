@@ -226,6 +226,22 @@ export function createOyo10xClient({
 
 const VIEW_ROLES = ['Admin', 'Super Admin', 'Stakeholder'];
 
+/** Safe dashboard diagnosis without returning URLs, API keys or upstream response bodies. */
+export function oyo10xConnectionView(snapshot) {
+  const status = snapshot?.status || 'not-configured';
+  const error = snapshot?.error || '';
+  let message = 'Connected.';
+  if (status === 'not-configured') message = 'Configure OYO10X_API_URL and OYO10X_API_KEY on the SIGAR backend, then restart or redeploy it.';
+  else if (status !== 'ok') {
+    if (/HTTP (401|403)\b/.test(error)) message = '10x rejected API access. Check that the backend API key is active and has access.';
+    else if (/HTTP 404\b/.test(error)) message = '10x endpoint was not found. Check the API URL and that the 10x deployment is complete.';
+    else if (/respond in time/.test(error)) message = '10x timed out. The connection will retry automatically.';
+    else message = '10x is unavailable. Check the 10x deployment and backend connection; retry is automatic.';
+    if (status === 'stale') message += ' Showing the last successful figures.';
+  }
+  return { status, message, fetchedAt: snapshot?.fetchedAt || null };
+}
+
 /** Registers the route and returns the client, so other modules share its cache and back-off. */
 export function registerOyo10xRoutes({ app, auth, rateLimit, asyncRoute, client = createOyo10xClient() }) {
   if (!client.configured)

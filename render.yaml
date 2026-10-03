@@ -19,6 +19,10 @@ services:
         value: https://e-monitoring.onrender.com
       - key: IREV_AUTO_SYNC
         value: "false"
+      - key: OYO10X_API_URL
+        value: https://oyo10x.oyoahead.com/api/external/v1
+      - key: OYO10X_API_KEY
+        sync: false
       - key: DATABASE_URL
         sync: false
       - key: ADMIN_EMAIL

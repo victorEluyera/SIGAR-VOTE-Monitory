@@ -279,4 +279,6 @@
 
 
 .fb-sentiment-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-@media (min-width: 1101px) { .pv-overview { min-height: 0; } .pv-overview .pv-main4, .pv-overview .pv-online { flex: 1; min-height: 0; } .pv-overview .pv-row > .pv-card { min-height: 0; overflow-y: auto; } }
+.pv-overview { height: auto; min-height: 0; overflow: visible; }
+.pv-overview .pv-row { flex: none; }
+.pv-overview .pv-row > .pv-card { overflow: visible; }

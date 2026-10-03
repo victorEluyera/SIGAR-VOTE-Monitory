@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { apiRequest } from "../../api/client.js";
-import { useFitHeight } from "./useFitHeight.js";
 import "./pre-election-views.css";
 
 /**
@@ -198,7 +197,6 @@ function Online({ online }) {
 }
 
 export default function OverviewTab({ authToken, onOpenLga }) {
-  const [fitRef, fitHeight] = useFitHeight();
   const query = useQuery({
     queryKey: ["pre-election-overview"],
     queryFn: ({ signal }) => apiRequest("/pre-election/overview", authToken, { signal }),
@@ -206,14 +204,15 @@ export default function OverviewTab({ authToken, onOpenLga }) {
     refetchInterval: 60_000,
   });
   const data = query.data;
-  if (query.isError) return <section className="pv" ref={fitRef}><p className="pv-empty">{query.error.message}</p></section>;
-  if (!data) return <section className="pv" ref={fitRef}><p className="pv-empty">Loading the overview…</p></section>;
+  if (query.isError) return <section className="pv pv-overview"><p className="pv-empty">{query.error.message}</p></section>;
+  if (!data) return <section className="pv pv-overview"><p className="pv-empty">Loading the overview…</p></section>;
 
   const { intention, numbers, tenx, projects, coverage, intelligence, online } = data;
   const stageTotal = projects?.stages ? STAGES.reduce((sum, stage) => sum + (projects.stages[stage.id] || 0), 0) : 0;
 
   return (
-    <section ref={fitRef} style={fitHeight ? { height: fitHeight } : undefined} className="pv pv-overview" aria-label="Overview">
+    <section className="pv pv-overview" aria-label="Overview">
+      {data.tenxConnection && data.tenxConnection.status !== "ok" && <p className="pv-note" role="status">10x: {data.tenxConnection.message}</p>}
       <div className="pv-kpis pv-kpis-6">
         <Kpi label="Registered voters" value={compact(numbers.registered)} note={numbers.pvcRate != null ? `${compact(numbers.registered - numbers.pvcUncollected)} collected their PVC (${pct(numbers.pvcRate, 1)})` : "voter register"} />
         <Kpi label="PVC not collected" value={num(numbers.pvcUncollected)} note={numbers.pvcRate != null ? `${pct(1 - numbers.pvcRate, 1)} of the register` : ""} />
