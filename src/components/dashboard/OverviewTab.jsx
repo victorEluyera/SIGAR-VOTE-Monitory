@@ -220,7 +220,7 @@ export default function OverviewTab({ authToken, onOpenLga }) {
         <Kpi lead label="APC members" value={num(numbers.members)} note={numbers.members != null && numbers.registered ? `${pct(numbers.members / numbers.registered, 1)} of registered voters` : ""} />
         <Kpi label="Polling units reached" value={num(numbers.pollingUnitsReached)} note={numbers.pollingUnitsReached != null ? `${num(Math.max(numbers.pollingUnits - numbers.pollingUnitsReached, 0))} polling units remaining · of ${num(numbers.pollingUnits)}` : ""} />
         <Kpi label="10x PU promoters" value={tenx.connected ? num(tenx.promoters) : "—"}
-          note={tenx.connected ? `${pct(tenx.promoters / tenx.target, 1)} of ${compact(tenx.target)} target · in ${num(tenx.pollingUnits)} PUs` : "10x not connected yet"}
+          note={tenx.connected ? `${pct(tenx.promoters / tenx.target, 1)} of ${compact(tenx.target)} target · in ${num(tenx.pollingUnits)} PUs · ${tenx.apcOverlapLoaded && tenx.apc10xPromoters != null ? `${num(tenx.apc10xPromoters)} match supplied APC list` : "APC matching unavailable"}` : "10x not connected yet"}
           meter={tenx.connected ? tenx.promoters / tenx.target : null} />
         <Kpi label="Community projects" value={projects?.wards != null ? `${num(projects.wards)} / ${projects.wardsTotal}` : "—"}
           note={projects ? `wards covered · ${num(projects.total)} projects` : "from 10x, none shared yet"}

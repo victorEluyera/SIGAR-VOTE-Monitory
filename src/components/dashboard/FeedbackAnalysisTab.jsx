@@ -152,6 +152,31 @@ function CallCenterAnalysis({ channel }) {
 
 function FieldAnalysis({ channel }) {
   const d = channel.detail;
+  if (channel.source === "oyo10x") return (
+    <div className="fb-drill-grid">
+      <Block title="Sentiment" sub="· share of classified answers">
+        {channel.sentimentAvailable ? <BarList rows={["positive", "negative", "neutral"].map((name) => ({ name, value: channel.sentiment[name] / channel.sentiment.classified }))} format={pct} /> : <p className="pv-note">No sentiment answers collected</p>}
+        <p className="pv-note">{num(channel.sentiment.classified)} classified answers · {num(channel.sentiment.other)} other answers. Multiple answers may come from one response.</p>
+      </Block>
+      <Block title="Issues and needs" sub="· submitted responses mentioning each topic">
+        <BarList rows={channel.topIssues.map((row) => ({ name: row.name, value: row.count }))} />
+        <p className="pv-note">Topics may overlap; their counts do not represent unique respondent totals.</p>
+      </Block>
+      <Block title="Collection window">
+        <p className="pv-note">{channel.firstCollectedAt ? new Date(channel.firstCollectedAt).toLocaleString("en-GB", { timeZone: "Africa/Lagos" }) : "No responses collected"}{channel.lastCollectedAt ? ` – ${new Date(channel.lastCollectedAt).toLocaleString("en-GB", { timeZone: "Africa/Lagos" })}` : ""} · Africa/Lagos</p>
+        <p className="pv-note">Submitted responses include pending and rejected reviews.{channel.invalidAnswers != null ? ` ${num(channel.invalidAnswers)} invalid answer payloads.` : ""}</p>
+        {channel.perDay.length > 0 && <BarList rows={channel.perDay.map((row) => ({ name: row.date, value: row.responses }))} />}
+      </Block>
+      <Block title="Responses by LGA"><BarList rows={d.byLga.map((row) => ({ name: row.name, value: row.answers }))} /></Block>
+      {d.questions.map((question) => <Block key={JSON.stringify([question.task_id, question.question_id])} title={question.question} sub={`· ${question.task_title} · ${num(question.responses)} responses`}>
+        <BarList rows={question.answers.map((answer) => ({ name: answer.value, value: answer.responses }))} />
+        <p className="pv-note">{num(question.free_text_responses)} free-text responses withheld · {num(question.unclassified_responses)} unclassified. Multiple choices may exceed response totals.</p>
+      </Block>)}
+      <Block title="Polling-unit collection">
+        <ul className="pv-list">{d.locations.map((row, index) => <li key={`${row.polling_unit_code || "unresolved"}-${index}`}><span>{row.lga} · {row.ward} · {row.polling_unit_code || "Unresolved PU"}{row.location_resolved ? "" : " · location unverified"}</span><b>{num(row.responses)}</b></li>)}</ul>
+      </Block>
+    </div>
+  );
   const shares = (rows) => rows.map((row) => ({ name: row.name, value: row.share }));
   return (
     <div className="fb-drill-grid">
@@ -350,8 +375,8 @@ export default function FeedbackAnalysisTab({ authToken }) {
               <ChannelCard title="10x field work" sub={`Field responses${field.collectors ? ` · ${field.collectors} collectors` : ""} · top issues`} accent="#d9aa4b" open={open === "field"} onToggle={() => toggle("field")}
                 stats={[
                   { label: "Answers", value: num(field.responses), note: data.place },
-                  { label: "Sen. Alli", value: pct(field.focusShare), note: "of named choices" },
-                  { label: "Not decided", value: pct(field.undecided), note: "named no one", tone: "watch" },
+                  field.source === "oyo10x" ? { label: "Positive", value: field.sentimentAvailable ? pct(field.sentiment.positiveShare) : "—", note: field.sentimentAvailable ? "classified answer share" : "No sentiment answers collected" } : { label: "Sen. Alli", value: pct(field.focusShare), note: "of named choices" },
+                  field.source === "oyo10x" ? { label: "Negative", value: field.sentimentAvailable ? pct(field.sentiment.negativeShare) : "—", note: `${num(field.sentiment.other)} other answers`, tone: "watch" } : { label: "Not decided", value: pct(field.undecided), note: "named no one", tone: "watch" },
                 ]}
                 bars={field.topIssues.map((row) => ({ label: sentenceCase(row.name).split(/[ &/]/)[0], value: row.share, display: pct(row.share) }))} />
             ) : <div className="fb-channel fb-channel-empty"><b>10x field work</b><small>No field survey loaded yet.</small></div>}

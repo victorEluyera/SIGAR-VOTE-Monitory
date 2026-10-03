@@ -1,6 +1,7 @@
 import { createSurveyReader, FOCUS_PATTERN } from '../voter-survey/analysis.js';
 import { themeLabel } from '../pre-election/contact-center.js';
 import { lgaLabel, matchLga } from '../pre-election/lga.js';
+import { tenxFieldChannel } from './tenx-field-work.js';
 
 /**
  * The three feedback channels as cards, each with a drill-down, plus the critical intelligence
@@ -146,6 +147,13 @@ function critical({ callCenter, field, online }) {
     add('watch', 'Call center', `${fmt(callCenter.calls)} calls from here; callers raise ${list(callCenter.detail.themes.slice(0, 3).map((row) => lower(row.label)))} most.`);
   }
   if (field.available) {
+    if (field.source === 'oyo10x') {
+      add(field.sentimentAvailable ? 'info' : 'watch', '10x field work', field.sentimentAvailable
+        ? `${pct(field.sentiment.positiveShare)} positive and ${pct(field.sentiment.negativeShare)} negative among ${fmt(field.sentiment.classified)} classified sentiment answers; ${fmt(field.sentiment.other)} other answers are excluded from these shares.`
+        : 'No sentiment answers collected.');
+      if (!field.responses) add('info', '10x field work', 'No field-work responses collected in this selection.');
+      if (field.invalidAnswers) add('watch', '10x field work', `${fmt(field.invalidAnswers)} submitted responses have invalid answer payloads. Review collection quality before interpreting distributions.`);
+    }
     const weak = field.detail.weakest.filter((row) => row.share < 0.2).slice(0, 3);
     if (weak.length) add('risk', '10x field work', `Sen. Alli is weakest in ${list(weak.map((row) => `${row.name} (${pct(row.share)})`))}, as a share of people who named a candidate.`);
     if (field.topIssues[0]) add('watch', '10x field work', `${sentence(field.topIssues[0].name)} is the top issue in the field (${pct(field.topIssues[0].share)} of answers)${field.topIssues[1] ? `, then ${lower(field.topIssues[1].name)} (${pct(field.topIssues[1].share)})` : ''}.`);
@@ -154,14 +162,14 @@ function critical({ callCenter, field, online }) {
   if (online.available) {
     add('risk', 'Online', `Anger is ${online.emotion.us.anger}% of the feeling in ${online.subjects.us}'s mentions and negative mentions rose ${online.sentiment.change.negative}% on the week before (${online.period.label}).`);
   }
-  const order = { risk: 0, watch: 1, good: 2 };
+  const order = { risk: 0, watch: 1, good: 2, info: 3 };
   return out.sort((a, b) => order[a.tone] - order[b.tone]);
 }
 
-export function buildChannels({ survey = null, centerSet = null, online = null, analysis, lga = '' }) {
+export function buildChannels({ survey = null, centerSet = null, online = null, tenx = null, analysis, lga = '' }) {
   const wanted = lga ? matchLga(lga) : '';
   const callCenter = callCenterChannel(centerSet, wanted);
-  const field = fieldChannel(survey, analysis, wanted);
+  const field = tenx?.fieldWork ? tenxFieldChannel(tenx.fieldWork, wanted) : fieldChannel(survey, analysis, wanted);
   const onlineView = onlineChannel(online);
   return { callCenter, field, online: onlineView, critical: critical({ callCenter, field, online: onlineView }) };
 }

@@ -76,6 +76,20 @@ const jsonResponse = (body, status = 200) => ({
   json: async () => body,
 });
 
+test('base URLs and full /all endpoint URLs use the same endpoint and API-key header', async () => {
+  for (const baseUrl of ['https://example.test/api/external/v1', 'https://example.test/api/external/v1/all/']) {
+    const client = createOyo10xClient({
+      baseUrl, apiKey: 'test-key',
+      fetchImpl: async (url, options) => {
+        assert.equal(url, 'https://example.test/api/external/v1/all');
+        assert.equal(options.headers['X-API-Key'], 'test-key');
+        return jsonResponse(sample());
+      },
+    });
+    assert.equal((await client.snapshot()).status, 'ok');
+  }
+});
+
 test('not configured means no network call at all', async () => {
   let calls = 0;
   const client = createOyo10xClient({ baseUrl: '', apiKey: '', fetchImpl: async () => { calls += 1; } });

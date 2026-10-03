@@ -130,7 +130,7 @@ export function registerFeedbackRoutes({ app, auth, rateLimit, asyncRoute, store
     if (!cache.has(key)) {
       if (cache.size > 100) cache.clear();
       const analysis = buildFeedbackAnalysis({ survey, responses, links, projects, centerSet, tenx: snapshot?.data || null, lga, agents });
-      cache.set(key, { ...analysis, channels: buildChannels({ survey, centerSet, online: onlineReport(), analysis, lga }) });
+      cache.set(key, { ...analysis, channels: buildChannels({ survey, centerSet, online: onlineReport(), tenx: snapshot?.data || null, analysis, lga }) });
     }
     res.set('Cache-Control', 'private, max-age=30');
     res.json({ ...cache.get(key), canManage });

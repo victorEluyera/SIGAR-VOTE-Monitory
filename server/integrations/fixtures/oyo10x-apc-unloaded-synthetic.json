@@ -1,0 +1,557 @@
+{
+  "schema_version": "2.0",
+  "generated_at": "2026-10-03T09:00:00.000Z",
+  "last_updated_at": "2026-10-03T09:00:00.000Z",
+  "aggregates_only": true,
+  "test_records_excluded": true,
+  "summary": {
+    "generated_at": "2026-10-03T09:00:00.000Z",
+    "last_updated_at": "2026-10-03T09:00:00.000Z",
+    "totals": {
+      "members": 10,
+      "verified": 2,
+      "pending": 8,
+      "flagged": 0,
+      "rejected": 0,
+      "unit_promoters": 7,
+      "grassroots": 3,
+      "promoters_verified": 2,
+      "promoters_pending": 5,
+      "promoters_flagged": 0,
+      "promoters_rejected": 0,
+      "volunteers_verified": 0,
+      "volunteers_pending": 3,
+      "volunteers_flagged": 0,
+      "volunteers_rejected": 0,
+      "registered": 10,
+      "volunteers": 3,
+      "apc_10x_promoters": null
+    },
+    "coverage": {
+      "lgas": 1,
+      "wards": 1,
+      "polling_units": 1
+    },
+    "promoters_by_status": {
+      "verified": 2,
+      "pending": 5,
+      "flagged": 0,
+      "rejected": 0
+    },
+    "volunteers_by_status": {
+      "verified": 0,
+      "pending": 3,
+      "flagged": 0,
+      "rejected": 0
+    },
+    "surveys": {
+      "count": 1,
+      "responses": 5
+    },
+    "projects": {
+      "total": 0,
+      "stages": {
+        "submitted": 0,
+        "not_started": 0,
+        "ongoing": 0,
+        "completed": 0,
+        "other": 0
+      },
+      "estimated_cost": 0
+    }
+  },
+  "totals": {
+    "members": 10,
+    "verified": 2,
+    "pending": 8,
+    "flagged": 0,
+    "rejected": 0,
+    "unit_promoters": 7,
+    "grassroots": 3,
+    "promoters_verified": 2,
+    "promoters_pending": 5,
+    "promoters_flagged": 0,
+    "promoters_rejected": 0,
+    "volunteers_verified": 0,
+    "volunteers_pending": 3,
+    "volunteers_flagged": 0,
+    "volunteers_rejected": 0,
+    "registered": 10,
+    "volunteers": 3,
+    "apc_10x_promoters": null
+  },
+  "coverage": {
+    "lgas": 1,
+    "wards": 1,
+    "polling_units": 1,
+    "by_lga": [
+      {
+        "lga": "Afijio",
+        "name": "Afijio",
+        "members": 10,
+        "verified": 2,
+        "pending": 8,
+        "flagged": 0,
+        "rejected": 0,
+        "unit_promoters": 7,
+        "grassroots": 3,
+        "promoters_verified": 2,
+        "promoters_pending": 5,
+        "promoters_flagged": 0,
+        "promoters_rejected": 0,
+        "volunteers_verified": 0,
+        "volunteers_pending": 3,
+        "volunteers_flagged": 0,
+        "volunteers_rejected": 0,
+        "projects": 0,
+        "estimated_cost": 0,
+        "projects_without_cost": 0
+      }
+    ],
+    "by_ward": [
+      {
+        "lga": "Afijio",
+        "ward": "ILORA I",
+        "ward_code": "30/01/01",
+        "name": "ILORA I",
+        "members": 10,
+        "verified": 2,
+        "pending": 8,
+        "flagged": 0,
+        "rejected": 0,
+        "unit_promoters": 7,
+        "grassroots": 3,
+        "promoters_verified": 2,
+        "promoters_pending": 5,
+        "promoters_flagged": 0,
+        "promoters_rejected": 0,
+        "volunteers_verified": 0,
+        "volunteers_pending": 3,
+        "volunteers_flagged": 0,
+        "volunteers_rejected": 0,
+        "projects": 0,
+        "estimated_cost": 0,
+        "projects_without_cost": 0
+      }
+    ],
+    "by_polling_unit": [
+      {
+        "lga": "Afijio",
+        "ward": "ILORA I",
+        "ward_code": "30/01/01",
+        "polling_unit": "A.U.D PRY. SCHOOL",
+        "polling_unit_code": "30/01/01/001",
+        "code": "30/01/01/001",
+        "name": "A.U.D PRY. SCHOOL",
+        "members": 10,
+        "verified": 2,
+        "pending": 8,
+        "flagged": 0,
+        "rejected": 0,
+        "unit_promoters": 7,
+        "grassroots": 3,
+        "promoters_verified": 2,
+        "promoters_pending": 5,
+        "promoters_flagged": 0,
+        "promoters_rejected": 0,
+        "volunteers_verified": 0,
+        "volunteers_pending": 3,
+        "volunteers_flagged": 0,
+        "volunteers_rejected": 0,
+        "projects": 0,
+        "estimated_cost": 0,
+        "projects_without_cost": 0
+      }
+    ],
+    "by_senatorial_district": [
+      {
+        "name": "Oyo South",
+        "members": 0,
+        "verified": 0,
+        "pending": 0,
+        "flagged": 0,
+        "rejected": 0,
+        "unit_promoters": 0,
+        "grassroots": 0,
+        "promoters_verified": 0,
+        "promoters_pending": 0,
+        "promoters_flagged": 0,
+        "promoters_rejected": 0,
+        "volunteers_verified": 0,
+        "volunteers_pending": 0,
+        "volunteers_flagged": 0,
+        "volunteers_rejected": 0
+      },
+      {
+        "name": "Oyo Central",
+        "members": 10,
+        "verified": 2,
+        "pending": 8,
+        "flagged": 0,
+        "rejected": 0,
+        "unit_promoters": 7,
+        "grassroots": 3,
+        "promoters_verified": 2,
+        "promoters_pending": 5,
+        "promoters_flagged": 0,
+        "promoters_rejected": 0,
+        "volunteers_verified": 0,
+        "volunteers_pending": 3,
+        "volunteers_flagged": 0,
+        "volunteers_rejected": 0
+      },
+      {
+        "name": "Oyo North",
+        "members": 0,
+        "verified": 0,
+        "pending": 0,
+        "flagged": 0,
+        "rejected": 0,
+        "unit_promoters": 0,
+        "grassroots": 0,
+        "promoters_verified": 0,
+        "promoters_pending": 0,
+        "promoters_flagged": 0,
+        "promoters_rejected": 0,
+        "volunteers_verified": 0,
+        "volunteers_pending": 0,
+        "volunteers_flagged": 0,
+        "volunteers_rejected": 0
+      }
+    ]
+  },
+  "by_lga": {
+    "complete": true,
+    "areas": [
+      {
+        "lga": "Afijio",
+        "name": "Afijio",
+        "members": 10,
+        "verified": 2,
+        "pending": 8,
+        "flagged": 0,
+        "rejected": 0,
+        "unit_promoters": 7,
+        "grassroots": 3,
+        "promoters_verified": 2,
+        "promoters_pending": 5,
+        "promoters_flagged": 0,
+        "promoters_rejected": 0,
+        "volunteers_verified": 0,
+        "volunteers_pending": 3,
+        "volunteers_flagged": 0,
+        "volunteers_rejected": 0,
+        "projects": 0,
+        "estimated_cost": 0,
+        "projects_without_cost": 0
+      }
+    ]
+  },
+  "by_ward": {
+    "complete": true,
+    "areas": [
+      {
+        "lga": "Afijio",
+        "ward": "ILORA I",
+        "ward_code": "30/01/01",
+        "name": "ILORA I",
+        "members": 10,
+        "verified": 2,
+        "pending": 8,
+        "flagged": 0,
+        "rejected": 0,
+        "unit_promoters": 7,
+        "grassroots": 3,
+        "promoters_verified": 2,
+        "promoters_pending": 5,
+        "promoters_flagged": 0,
+        "promoters_rejected": 0,
+        "volunteers_verified": 0,
+        "volunteers_pending": 3,
+        "volunteers_flagged": 0,
+        "volunteers_rejected": 0,
+        "projects": 0,
+        "estimated_cost": 0,
+        "projects_without_cost": 0
+      }
+    ]
+  },
+  "by_polling_unit": {
+    "complete": true,
+    "areas": [
+      {
+        "lga": "Afijio",
+        "ward": "ILORA I",
+        "ward_code": "30/01/01",
+        "polling_unit": "A.U.D PRY. SCHOOL",
+        "polling_unit_code": "30/01/01/001",
+        "code": "30/01/01/001",
+        "name": "A.U.D PRY. SCHOOL",
+        "members": 10,
+        "verified": 2,
+        "pending": 8,
+        "flagged": 0,
+        "rejected": 0,
+        "unit_promoters": 7,
+        "grassroots": 3,
+        "promoters_verified": 2,
+        "promoters_pending": 5,
+        "promoters_flagged": 0,
+        "promoters_rejected": 0,
+        "volunteers_verified": 0,
+        "volunteers_pending": 3,
+        "volunteers_flagged": 0,
+        "volunteers_rejected": 0,
+        "projects": 0,
+        "estimated_cost": 0,
+        "projects_without_cost": 0
+      }
+    ]
+  },
+  "by_senatorial_district": {
+    "complete": true,
+    "areas": [
+      {
+        "name": "Oyo South",
+        "members": 0,
+        "verified": 0,
+        "pending": 0,
+        "flagged": 0,
+        "rejected": 0,
+        "unit_promoters": 0,
+        "grassroots": 0,
+        "promoters_verified": 0,
+        "promoters_pending": 0,
+        "promoters_flagged": 0,
+        "promoters_rejected": 0,
+        "volunteers_verified": 0,
+        "volunteers_pending": 0,
+        "volunteers_flagged": 0,
+        "volunteers_rejected": 0
+      },
+      {
+        "name": "Oyo Central",
+        "members": 10,
+        "verified": 2,
+        "pending": 8,
+        "flagged": 0,
+        "rejected": 0,
+        "unit_promoters": 7,
+        "grassroots": 3,
+        "promoters_verified": 2,
+        "promoters_pending": 5,
+        "promoters_flagged": 0,
+        "promoters_rejected": 0,
+        "volunteers_verified": 0,
+        "volunteers_pending": 3,
+        "volunteers_flagged": 0,
+        "volunteers_rejected": 0
+      },
+      {
+        "name": "Oyo North",
+        "members": 0,
+        "verified": 0,
+        "pending": 0,
+        "flagged": 0,
+        "rejected": 0,
+        "unit_promoters": 0,
+        "grassroots": 0,
+        "promoters_verified": 0,
+        "promoters_pending": 0,
+        "promoters_flagged": 0,
+        "promoters_rejected": 0,
+        "volunteers_verified": 0,
+        "volunteers_pending": 0,
+        "volunteers_flagged": 0,
+        "volunteers_rejected": 0
+      }
+    ]
+  },
+  "projects": {
+    "total": 0,
+    "count": 0,
+    "complete": true,
+    "truncated": false,
+    "next_offset": null,
+    "rows": [],
+    "projects": [],
+    "stages": {
+      "submitted": 0,
+      "not_started": 0,
+      "ongoing": 0,
+      "completed": 0,
+      "other": 0
+    }
+  },
+  "field_work": {
+    "surveys": 1,
+    "responses": 5,
+    "first_collected_at": "2026-10-02T09:30:00.000Z",
+    "last_collected_at": "2026-10-03T08:30:00.000Z",
+    "reporting_timezone": "Africa/Lagos",
+    "responses_by_date": [
+      {
+        "date": "2026-10-02",
+        "responses": 3
+      },
+      {
+        "date": "2026-10-03",
+        "responses": 2
+      }
+    ],
+    "questions": [
+      {
+        "task_id": 1,
+        "task_title": "Example community survey",
+        "question_id": "need",
+        "question": "Main community need",
+        "type": "select",
+        "responses": 5,
+        "answers": [
+          {
+            "value": "Water",
+            "responses": 3
+          },
+          {
+            "value": "Roads",
+            "responses": 2
+          }
+        ],
+        "free_text_responses": 0,
+        "unclassified_responses": 0
+      },
+      {
+        "task_id": 1,
+        "task_title": "Example community survey",
+        "question_id": "sentiment",
+        "question": "Community sentiment",
+        "type": "select",
+        "responses": 5,
+        "answers": [
+          {
+            "value": "Positive",
+            "responses": 3
+          },
+          {
+            "value": "Negative",
+            "responses": 2
+          }
+        ],
+        "free_text_responses": 0,
+        "unclassified_responses": 0
+      }
+    ],
+    "by_location": [
+      {
+        "lga": "Afijio",
+        "ward": "ILORA I",
+        "polling_unit": "A.U.D PRY. SCHOOL",
+        "ward_code": "30/01/01",
+        "polling_unit_code": "30/01/01/001",
+        "location_resolved": true,
+        "responses": 5,
+        "questions": [
+          {
+            "task_id": 1,
+            "task_title": "Example community survey",
+            "question_id": "need",
+            "question": "Main community need",
+            "type": "select",
+            "responses": 5,
+            "answers": [
+              {
+                "value": "Water",
+                "responses": 3
+              },
+              {
+                "value": "Roads",
+                "responses": 2
+              }
+            ],
+            "free_text_responses": 0,
+            "unclassified_responses": 0
+          },
+          {
+            "task_id": 1,
+            "task_title": "Example community survey",
+            "question_id": "sentiment",
+            "question": "Community sentiment",
+            "type": "select",
+            "responses": 5,
+            "answers": [
+              {
+                "value": "Positive",
+                "responses": 3
+              },
+              {
+                "value": "Negative",
+                "responses": 2
+              }
+            ],
+            "free_text_responses": 0,
+            "unclassified_responses": 0
+          }
+        ],
+        "issues_and_needs": [
+          {
+            "topic": "Water",
+            "responses": 3
+          },
+          {
+            "topic": "Roads",
+            "responses": 2
+          }
+        ],
+        "sentiment": {
+          "positive": 3,
+          "negative": 2,
+          "neutral": 0,
+          "other": 0
+        },
+        "first_collected_at": "2026-10-02T09:30:00.000Z",
+        "last_collected_at": "2026-10-03T08:30:00.000Z"
+      }
+    ],
+    "issues_and_needs": [
+      {
+        "topic": "Water",
+        "responses": 3
+      },
+      {
+        "topic": "Roads",
+        "responses": 2
+      }
+    ],
+    "sentiment": {
+      "positive": 3,
+      "negative": 2,
+      "neutral": 0,
+      "other": 0
+    },
+    "sentiment_available": true,
+    "invalid_answer_payload_responses": 0,
+    "methods": {
+      "answers": "Counts of recognised questionnaire options; multiple choices may exceed response totals.",
+      "sentiment": "Only explicit sentiment/satisfaction question options; no sentiment inferred from registrations or project counts.",
+      "issues_and_needs": "Community-issue question choices plus rule-based topic matches in free text; multiple topics may count one response.",
+      "free_text": "Original free-text responses are withheld; counts and topic categories only."
+    }
+  },
+  "surveys": {
+    "count": 1,
+    "responses": 5
+  },
+  "notes": {
+    "member_status": "verified/pending/flagged/rejected are recorded member statuses, independent of contact-centre and VIN checks.",
+    "coverage": "Canonical locations with at least one member; this is not the 10-promoter saturation measure.",
+    "unknown_locations": "Unresolved locations remain in aggregate rows with null official codes; they do not inflate official coverage.",
+    "project_status": "promised/request/submitted => submitted; approved/planned/pending => not_started; ongoing => ongoing; delivered/completed => completed.",
+    "test_records": "Explicit is_test flags, test-prefixed names/titles, and (delete me) markers, including test owners, are excluded."
+  },
+  "apc_promoter_overlap": {
+    "loaded": false,
+    "matched_promoters": null,
+    "matched_promoter_records": null,
+    "method": "Load the APC contact list to match names and phones."
+  }
+}

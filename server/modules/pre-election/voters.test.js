@@ -110,7 +110,7 @@ test('overview: 10x promoters and projects, and the online report, feed the numb
   const survey = baselineSurvey();
   const tenx = { totals: { unitPromoters: 5832 }, coverage: { pollingUnits: 4210 }, projects: { total: 3, stages: { submitted: 1, notStarted: 0, ongoing: 1, completed: 1, other: 0 }, wards: 2, byLga: [{ name: 'Ibadan North', projects: 3 }] } };
   const overview = buildOverview({ pulse: buildPulse({ datasets, survey }), map: buildMap({ datasets, survey, register: baselineRegister() }), tenx, online: onlineReport(), promoterTarget: 750000 });
-  assert.deepEqual(overview.tenx, { connected: true, promoters: 5832, target: 750000, pollingUnits: 4210, updatedAt: null });
+  assert.deepEqual(overview.tenx, { connected: true, promoters: 5832, apc10xPromoters: null, apcOverlapLoaded: false, target: 750000, pollingUnits: 4210, updatedAt: null });
   assert.equal(overview.projects.wards, 2);
   assert.equal(overview.projects.lgas, 1);
   assert.equal(overview.projects.lgasWithout.length, 32);

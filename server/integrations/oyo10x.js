@@ -14,6 +14,8 @@
  *    status -- the last good figures marked stale, or an explicit "unavailable" -- never a throw.
  */
 
+import { sanitizeFieldWork, sanitizeOverlap } from './oyo10x-field-work.js';
+
 const CACHE_TTL_MS = 60_000;
 const REQUEST_TIMEOUT_MS = 10_000;
 const BACKOFF_START_MS = 60_000;
@@ -47,6 +49,7 @@ export function sanitizeOyo10x(raw = {}) {
   const coverage = summary.coverage || {};
   const surveys = summary.surveys || {};
   const report = raw.registrations_report || {};
+  const apcPromoterOverlap = sanitizeOverlap(raw.apc_promoter_overlap, totals.apc_10x_promoters);
 
   const candidates = (Array.isArray(raw.candidates) ? raw.candidates : []).filter((c) => !isTestRecord(c?.name));
   const byOffice = new Map();
@@ -94,6 +97,8 @@ export function sanitizeOyo10x(raw = {}) {
 
   return {
     sourceGeneratedAt: raw.generated_at || summary.generated_at || null,
+    fieldWork: sanitizeFieldWork(raw.field_work),
+    apcPromoterOverlap,
     totals: {
       registered: count(totals.registered),
       verified: count(totals.verified),
@@ -101,6 +106,7 @@ export function sanitizeOyo10x(raw = {}) {
       flagged: count(totals.flagged),
       rejected: count(totals.rejected),
       unitPromoters: count(totals.unit_promoters),
+      apc10xPromoters: apcPromoterOverlap.matchedPromoters,
       grassroots: count(totals.grassroots),
     },
     coverage: {
@@ -172,7 +178,7 @@ export function createOyo10xClient({
   const configured = Boolean(url && key);
 
   const refresh = async () => {
-    const response = await fetchImpl(`${url}/all`, {
+    const response = await fetchImpl(url.endsWith('/all') ? url : `${url}/all`, {
       headers: { 'X-API-Key': key, Accept: 'application/json' },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });

@@ -154,6 +154,8 @@ export function buildOverview({ pulse, map, tenx = null, online = null, promoter
     tenx: tenx ? {
       connected: true,
       promoters: tenx.totals?.unitPromoters ?? 0,
+      apc10xPromoters: tenx.totals?.apc10xPromoters ?? null,
+      apcOverlapLoaded: tenx.apcPromoterOverlap?.loaded === true,
       target: promoterTarget,
       pollingUnits: tenx.coverage?.pollingUnits ?? 0,
       updatedAt: tenx.sourceGeneratedAt || null,
