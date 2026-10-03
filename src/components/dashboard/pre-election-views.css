@@ -166,8 +166,8 @@
 .pv-meter { height: 5px; margin-top: 4px; border-radius: 3px; background: var(--pv-sunk); overflow: hidden; }
 .pv-meter i { display: block; height: 100%; border-radius: 3px; background: var(--pv-gold); }
 .pv-row { display: grid; gap: 10px; align-items: stretch; }
-.pv-main4 { grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(0, 1.15fr); }
-.pv-online { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.pv-main4 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.pv-online { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .pv-donut { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 12px; align-items: center; }
 .pv-callout { display: flex; align-items: baseline; gap: 8px; margin-top: auto; padding: 8px 10px; border-radius: 8px; background: var(--pv-sunk); }
 .pv-callout strong { font-size: 26px; line-height: 1; color: var(--pv-gold-bright); font-variant-numeric: tabular-nums; }
